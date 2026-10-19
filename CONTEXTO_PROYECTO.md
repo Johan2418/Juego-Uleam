@@ -204,6 +204,10 @@ J ataque leve (combo) · K especial (cooldown) · L parry · Espacio ultimate (m
 
 ## 7. Bitácora
 
+### 2026-10-19 (3) — Repositorio en GitHub: https://github.com/Johan2418/Juego-Uleam
+- Rama `main`. Primer commit = estado del PC del 19/10 (sin `Claude outputs/`, `_backups/`, `_incoming/`, `.godot/`, `.tgz`, `.bak`/`_backup_` ni las imágenes de `referencias_animacion/`; ver `.gitignore`). Los `*.import` SÍ se suben.
+- **Regla de trabajo (pedida por el usuario): después de cada cambio que se despliega al PC, hacer un commit y push al repo** con un mensaje en español que describa el cambio. La carpeta del PC NO es un repo git (el puente no deja borrar archivos y git los necesita), así que el commit se hace desde la nube: clonar el repo (`git clone --depth 1`), copiar ahí los mismos archivos que se despliegan al PC (incluido `CONTEXTO_PROYECTO.md`), commit y push. Autor: Johan2418 <Johan2418@users.noreply.github.com>.
+
 ### 2026-10-19 (2) — Salón de las Facultades (entrada a los bosses, estilo Salón de los Dioses)
 - El campus ya no tiene 8 puertas: hay UNA puerta grande "SALÓN DE LAS FACULTADES" arriba (`campus.gd` → `HallDoor`; 8 rombos que se doran según los bosses vencidos). La clase `BossDoor` quedó sin usar.
 - Escena nueva `scenes/combat/boss_hall.tscn` + `scripts/combat/boss_hall.gd`: galería a oscuras con la estatua de piedra de cada boss en un nicho, bajo un haz de luz con polvo flotando (aditivo). Al acercarse, el haz se intensifica, la estatua se ilumina y abajo aparece el título de su facultad, el nombre del boss y su subtítulo (de `Arena.BOSSES`). Con interact (E / A) la estatua destella y se entra al combate con la intro completa. Esc o el arco de abajo vuelven al campus. Título de área al entrar: "SALÓN DE LAS FACULTADES · x / 8 vencidos". Música ambiente propia (`assets/audio/hall/hall_ambient.ogg`, generada con `tools/hall_music.py`).
