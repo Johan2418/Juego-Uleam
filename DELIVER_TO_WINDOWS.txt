@@ -1,0 +1,27 @@
+Prototipo Campus — presets Agent ×20
+=====================================
+
+Zip: /workspace/prototipo_presets_agent20.zip
+Paths inside zip are relative to the Godot project root (no nested prototipo/).
+
+What changed
+------------
+- 20 RGBA presets 128×192 in assets/sprites/student/variants/preset_00.png … preset_19.png
+- default.png + base.png ← preset_00; old base kept as base_old_camisa.png
+- Contact sheet: assets/sprites/student/_previews/presets_contact.png
+- Character creator UI: Name + Apariencia (cycle 20 looks) + Confirm
+- CharacterPreview loads variants/preset_XX.png (no HSV / no layer composite)
+
+On Windows
+----------
+1. Unzip over/into the Godot 4.6 project folder
+2. Open project.godot in Godot 4.6
+3. Play (F5) → cycle Apariencia through 00–19 → Confirm → main campus
+
+QA checklist
+------------
+- Contact sheet feet share one baseline
+- Each look loads a distinct PNG
+- Nearest-neighbor preview at 224px
+
+See assets/sprites/student/PRESETS.md for Spanish labels.

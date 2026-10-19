@@ -1,0 +1,697 @@
+{
+ "base_body": "gorra",
+ "body": {
+  "front": {
+   "neck": [
+    11.5,
+    0
+   ],
+   "shirt_ref": 0.8327,
+   "pants_ref": 0.3771
+  },
+  "back": {
+   "neck": [
+    11.5,
+    0
+   ],
+   "shirt_ref": 0.834,
+   "pants_ref": 0.3765
+  },
+  "right": {
+   "neck": [
+    5.5,
+    0
+   ],
+   "shirt_ref": 0.8301,
+   "pants_ref": 0.3771
+  }
+ },
+ "characters": [
+  {
+   "id": "wadrid",
+   "label": "Wadrid",
+   "heads": {
+    "front": {
+     "file": "heads/wadrid_front.png",
+     "anchor": [
+      11.9,
+      22
+     ]
+    },
+    "back": {
+     "file": "heads/wadrid_back.png",
+     "anchor": [
+      11.9,
+      22
+     ]
+    },
+    "right": {
+     "file": "heads/wadrid_right.png",
+     "anchor": [
+      11.4,
+      24
+     ]
+    }
+   },
+   "shirt": [
+    52,
+    82,
+    58
+   ],
+   "pants": [
+    70,
+    100,
+    150
+   ]
+  },
+  {
+   "id": "marlonx_a",
+   "label": "MarlonX-a",
+   "heads": {
+    "front": {
+     "file": "heads/marlonx_a_front.png",
+     "anchor": [
+      10.2,
+      20
+     ]
+    },
+    "back": {
+     "file": "heads/marlonx_a_back.png",
+     "anchor": [
+      10.2,
+      20
+     ]
+    },
+    "right": {
+     "file": "heads/marlonx_a_right.png",
+     "anchor": [
+      10.2,
+      23
+     ]
+    }
+   },
+   "shirt": [
+    70,
+    66,
+    78
+   ],
+   "pants": [
+    70,
+    100,
+    150
+   ]
+  },
+  {
+   "id": "gorra",
+   "label": "Gorra",
+   "heads": {
+    "front": {
+     "file": "heads/gorra_front.png",
+     "anchor": [
+      11.5,
+      24
+     ]
+    },
+    "back": {
+     "file": "heads/gorra_back.png",
+     "anchor": [
+      11.5,
+      24
+     ]
+    },
+    "right": {
+     "file": "heads/gorra_right.png",
+     "anchor": [
+      10.5,
+      23
+     ]
+    }
+   },
+   "shirt": [
+    195,
+    209,
+    236
+   ],
+   "pants": [
+    61,
+    91,
+    138
+   ]
+  },
+  {
+   "id": "chaqueta",
+   "label": "Chaqueta de cuero",
+   "heads": {
+    "front": {
+     "file": "heads/chaqueta_front.png",
+     "anchor": [
+      11.3,
+      22
+     ]
+    },
+    "back": {
+     "file": "heads/chaqueta_back.png",
+     "anchor": [
+      11.3,
+      22
+     ]
+    },
+    "right": {
+     "file": "heads/chaqueta_right.png",
+     "anchor": [
+      9.5,
+      21
+     ]
+    }
+   },
+   "shirt": [
+    40,
+    40,
+    44
+   ],
+   "pants": [
+    125,
+    125,
+    132
+   ]
+  },
+  {
+   "id": "traje_azul",
+   "label": "Traje azul",
+   "heads": {
+    "front": {
+     "file": "heads/traje_azul_front.png",
+     "anchor": [
+      11.9,
+      22
+     ]
+    },
+    "back": {
+     "file": "heads/traje_azul_back.png",
+     "anchor": [
+      11.9,
+      22
+     ]
+    },
+    "right": {
+     "file": "heads/traje_azul_right.png",
+     "anchor": [
+      11.1,
+      21
+     ]
+    }
+   },
+   "shirt": [
+    60,
+    73,
+    119
+   ],
+   "pants": [
+    59,
+    71,
+    117
+   ]
+  },
+  {
+   "id": "traje_negro",
+   "label": "Traje negro",
+   "heads": {
+    "front": {
+     "file": "heads/traje_negro_front.png",
+     "anchor": [
+      13.0,
+      24
+     ]
+    },
+    "back": {
+     "file": "heads/traje_negro_back.png",
+     "anchor": [
+      13.0,
+      24
+     ]
+    },
+    "right": {
+     "file": "heads/traje_negro_right.png",
+     "anchor": [
+      10.7,
+      23
+     ]
+    }
+   },
+   "shirt": [
+    77,
+    75,
+    84
+   ],
+   "pants": [
+    53,
+    50,
+    59
+   ]
+  },
+  {
+   "id": "futbolista",
+   "label": "Futbolista",
+   "heads": {
+    "front": {
+     "file": "heads/futbolista_front.png",
+     "anchor": [
+      11.7,
+      22
+     ]
+    },
+    "back": {
+     "file": "heads/futbolista_back.png",
+     "anchor": [
+      11.7,
+      22
+     ]
+    },
+    "right": {
+     "file": "heads/futbolista_right.png",
+     "anchor": [
+      10.0,
+      21
+     ]
+    }
+   },
+   "shirt": [
+    200,
+    45,
+    55
+   ],
+   "pants": [
+    40,
+    40,
+    44
+   ]
+  },
+  {
+   "id": "rubio",
+   "label": "Rubio",
+   "heads": {
+    "front": {
+     "file": "heads/rubio_front.png",
+     "anchor": [
+      13.0,
+      23
+     ]
+    },
+    "back": {
+     "file": "heads/rubio_back.png",
+     "anchor": [
+      11.1,
+      23
+     ]
+    },
+    "right": {
+     "file": "heads/rubio_right.png",
+     "anchor": [
+      10.3,
+      23
+     ]
+    }
+   },
+   "shirt": [
+    195,
+    209,
+    236
+   ],
+   "pants": [
+    60,
+    89,
+    135
+   ]
+  },
+  {
+   "id": "coleta",
+   "label": "Coleta",
+   "heads": {
+    "front": {
+     "file": "heads/coleta_front.png",
+     "anchor": [
+      12.9,
+      24
+     ]
+    },
+    "back": {
+     "file": "heads/coleta_back.png",
+     "anchor": [
+      12.9,
+      24
+     ]
+    },
+    "right": {
+     "file": "heads/coleta_right.png",
+     "anchor": [
+      14.4,
+      21
+     ]
+    }
+   },
+   "shirt": [
+    196,
+    209,
+    237
+   ],
+   "pants": [
+    60,
+    89,
+    136
+   ]
+  },
+  {
+   "id": "trenza",
+   "label": "Trenza",
+   "heads": {
+    "front": {
+     "file": "heads/trenza_front.png",
+     "anchor": [
+      12.1,
+      20
+     ]
+    },
+    "back": {
+     "file": "heads/trenza_back.png",
+     "anchor": [
+      11.2,
+      20
+     ]
+    },
+    "right": {
+     "file": "heads/trenza_right.png",
+     "anchor": [
+      8.8,
+      22
+     ]
+    }
+   },
+   "shirt": [
+    192,
+    206,
+    235
+   ],
+   "pants": [
+    62,
+    90,
+    136
+   ]
+  },
+  {
+   "id": "canoso",
+   "label": "Canoso",
+   "heads": {
+    "front": {
+     "file": "heads/canoso_front.png",
+     "anchor": [
+      11.0,
+      21
+     ]
+    },
+    "back": {
+     "file": "heads/canoso_back.png",
+     "anchor": [
+      11.0,
+      21
+     ]
+    },
+    "right": {
+     "file": "heads/canoso_right.png",
+     "anchor": [
+      12.5,
+      26
+     ]
+    }
+   },
+   "shirt": [
+    192,
+    206,
+    236
+   ],
+   "pants": [
+    61,
+    90,
+    136
+   ]
+  },
+  {
+   "id": "mochila",
+   "label": "Mochila",
+   "heads": {
+    "front": {
+     "file": "heads/mochila_front.png",
+     "anchor": [
+      12.1,
+      20
+     ]
+    },
+    "back": {
+     "file": "heads/mochila_back.png",
+     "anchor": [
+      12.5,
+      22
+     ]
+    },
+    "right": {
+     "file": "heads/mochila_right.png",
+     "anchor": [
+      9.8,
+      22
+     ]
+    }
+   },
+   "shirt": [
+    194,
+    205,
+    235
+   ],
+   "pants": [
+    61,
+    89,
+    134
+   ]
+  },
+  {
+   "id": "afro_rojo",
+   "label": "Afro rojo",
+   "heads": {
+    "front": {
+     "file": "heads/afro_rojo_front.png",
+     "anchor": [
+      16.2,
+      29
+     ]
+    },
+    "back": {
+     "file": "heads/afro_rojo_back.png",
+     "anchor": [
+      16.2,
+      29
+     ]
+    },
+    "right": {
+     "file": "heads/afro_rojo_right.png",
+     "anchor": [
+      14.5,
+      27
+     ]
+    }
+   },
+   "shirt": [
+    195,
+    209,
+    237
+   ],
+   "pants": [
+    61,
+    91,
+    138
+   ]
+  },
+  {
+   "id": "bufanda",
+   "label": "Bufanda",
+   "heads": {
+    "front": {
+     "file": "heads/bufanda_front.png",
+     "anchor": [
+      11.1,
+      20
+     ]
+    },
+    "back": {
+     "file": "heads/bufanda_back.png",
+     "anchor": [
+      11.6,
+      20
+     ]
+    },
+    "right": {
+     "file": "heads/bufanda_right.png",
+     "anchor": [
+      9.5,
+      18
+     ]
+    }
+   },
+   "shirt": [
+    195,
+    208,
+    236
+   ],
+   "pants": [
+    62,
+    90,
+    134
+   ]
+  },
+  {
+   "id": "explorador",
+   "label": "Explorador",
+   "heads": {
+    "front": {
+     "file": "heads/explorador_front.png",
+     "anchor": [
+      11.1,
+      20
+     ]
+    },
+    "back": {
+     "file": "heads/explorador_back.png",
+     "anchor": [
+      11.1,
+      20
+     ]
+    },
+    "right": {
+     "file": "heads/explorador_right.png",
+     "anchor": [
+      10.2,
+      20
+     ]
+    }
+   },
+   "shirt": [
+    120,
+    80,
+    50
+   ],
+   "pants": [
+    200,
+    175,
+    130
+   ]
+  },
+  {
+   "id": "pelirrojo",
+   "label": "Pelirrojo",
+   "heads": {
+    "front": {
+     "file": "heads/pelirrojo_front.png",
+     "anchor": [
+      14.0,
+      23
+     ]
+    },
+    "back": {
+     "file": "heads/pelirrojo_back.png",
+     "anchor": [
+      14.0,
+      23
+     ]
+    },
+    "right": {
+     "file": "heads/pelirrojo_right.png",
+     "anchor": [
+      14.5,
+      24
+     ]
+    }
+   },
+   "shirt": [
+    194,
+    209,
+    237
+   ],
+   "pants": [
+    61,
+    92,
+    138
+   ]
+  },
+  {
+   "id": "hoodie",
+   "label": "Hoodie",
+   "heads": {
+    "front": {
+     "file": "heads/hoodie_front.png",
+     "anchor": [
+      11.2,
+      19
+     ]
+    },
+    "back": {
+     "file": "heads/hoodie_back.png",
+     "anchor": [
+      11.2,
+      19
+     ]
+    },
+    "right": {
+     "file": "heads/hoodie_right.png",
+     "anchor": [
+      8.7,
+      20
+     ]
+    }
+   },
+   "shirt": [
+    197,
+    57,
+    61
+   ],
+   "pants": [
+    61,
+    90,
+    133
+   ]
+  },
+  {
+   "id": "rapado",
+   "label": "Rapado",
+   "heads": {
+    "front": {
+     "file": "heads/rapado_front.png",
+     "anchor": [
+      12.9,
+      22
+     ]
+    },
+    "back": {
+     "file": "heads/rapado_back.png",
+     "anchor": [
+      12.9,
+      26
+     ]
+    },
+    "right": {
+     "file": "heads/rapado_right.png",
+     "anchor": [
+      9.8,
+      20
+     ]
+    }
+   },
+   "shirt": [
+    194,
+    205,
+    236
+   ],
+   "pants": [
+    62,
+    89,
+    135
+   ]
+  }
+ ]
+}

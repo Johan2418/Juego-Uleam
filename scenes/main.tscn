@@ -1,0 +1,136 @@
+[gd_scene load_steps=7 format=3]
+
+[ext_resource type="Script" path="res://scripts/combat/campus.gd" id="1_campus"]
+[ext_resource type="PackedScene" path="res://scenes/combat/player.tscn" id="2_player"]
+[ext_resource type="PackedScene" path="res://scenes/combat/dummy_enemy.tscn" id="3_dummy"]
+
+[sub_resource type="RectangleShape2D" id="WallH"]
+size = Vector2(960, 32)
+
+[sub_resource type="RectangleShape2D" id="WallV"]
+size = Vector2(32, 640)
+
+[sub_resource type="RectangleShape2D" id="Block"]
+size = Vector2(80, 80)
+
+[node name="Campus" type="Node2D"]
+texture_filter = 1
+script = ExtResource("1_campus")
+
+[node name="Ground" type="Polygon2D" parent="."]
+z_index = -10
+color = Color(0.34, 0.55, 0.36, 1)
+polygon = PackedVector2Array(-480, -320, 480, -320, 480, 320, -480, 320)
+
+[node name="Path" type="Polygon2D" parent="."]
+z_index = -9
+color = Color(0.55, 0.5, 0.4, 1)
+polygon = PackedVector2Array(-80, -320, 80, -320, 80, 320, -80, 320)
+
+[node name="PathH" type="Polygon2D" parent="."]
+z_index = -9
+color = Color(0.55, 0.5, 0.4, 1)
+polygon = PackedVector2Array(-480, -60, 480, -60, 480, 60, -480, 60)
+
+[node name="Walls" type="StaticBody2D" parent="."]
+collision_layer = 1
+collision_mask = 0
+
+[node name="Top" type="CollisionShape2D" parent="Walls"]
+position = Vector2(0, -336)
+shape = SubResource("WallH")
+
+[node name="Bottom" type="CollisionShape2D" parent="Walls"]
+position = Vector2(0, 336)
+shape = SubResource("WallH")
+
+[node name="Left" type="CollisionShape2D" parent="Walls"]
+position = Vector2(-496, 0)
+shape = SubResource("WallV")
+
+[node name="Right" type="CollisionShape2D" parent="Walls"]
+position = Vector2(496, 0)
+shape = SubResource("WallV")
+
+[node name="WallVisualTop" type="Polygon2D" parent="."]
+z_index = -5
+color = Color(0.45, 0.35, 0.28, 1)
+polygon = PackedVector2Array(-480, -352, 480, -352, 480, -320, -480, -320)
+
+[node name="WallVisualBottom" type="Polygon2D" parent="."]
+z_index = -5
+color = Color(0.45, 0.35, 0.28, 1)
+polygon = PackedVector2Array(-480, 320, 480, 320, 480, 352, -480, 352)
+
+[node name="WallVisualLeft" type="Polygon2D" parent="."]
+z_index = -5
+color = Color(0.42, 0.32, 0.26, 1)
+polygon = PackedVector2Array(-512, -320, -480, -320, -480, 320, -512, 320)
+
+[node name="WallVisualRight" type="Polygon2D" parent="."]
+z_index = -5
+color = Color(0.42, 0.32, 0.26, 1)
+polygon = PackedVector2Array(480, -320, 512, -320, 512, 320, 480, 320)
+
+[node name="Planter" type="StaticBody2D" parent="."]
+position = Vector2(-220, -140)
+collision_layer = 1
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Planter"]
+shape = SubResource("Block")
+
+[node name="Visual" type="Polygon2D" parent="Planter"]
+color = Color(0.28, 0.48, 0.3, 1)
+polygon = PackedVector2Array(-40, -40, 40, -40, 40, 40, -40, 40)
+
+[node name="Planter2" type="StaticBody2D" parent="."]
+position = Vector2(240, 150)
+collision_layer = 1
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Planter2"]
+shape = SubResource("Block")
+
+[node name="Visual" type="Polygon2D" parent="Planter2"]
+color = Color(0.28, 0.48, 0.3, 1)
+polygon = PackedVector2Array(-40, -40, 40, -40, 40, 40, -40, 40)
+
+[node name="Player" parent="." instance=ExtResource("2_player")]
+unique_name_in_owner = true
+position = Vector2(0, 40)
+
+[node name="DummyEnemy" parent="." instance=ExtResource("3_dummy")]
+position = Vector2(180, -40)
+
+[node name="DummyEnemy2" parent="." instance=ExtResource("3_dummy")]
+position = Vector2(-160, 100)
+
+[node name="HUD" type="CanvasLayer" parent="."]
+
+[node name="Panel" type="PanelContainer" parent="HUD"]
+offset_left = 12.0
+offset_top = 12.0
+offset_right = 420.0
+offset_bottom = 110.0
+
+[node name="VBox" type="VBoxContainer" parent="HUD/Panel"]
+layout_mode = 2
+theme_override_constants/separation = 2
+
+[node name="HudName" type="Label" parent="HUD/Panel/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 20
+text = "Estudiante"
+
+[node name="HudClass" type="Label" parent="HUD/Panel/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 14
+text = "Clase: Guerrero"
+
+[node name="HudHint" type="Label" parent="HUD/Panel/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.85, 0.85, 0.7, 1)
+theme_override_font_sizes/font_size = 12
+text = "WASD mover · J primario · K secundario · Esc creador"

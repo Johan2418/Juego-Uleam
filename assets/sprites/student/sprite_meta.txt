@@ -1,0 +1,3 @@
+char_origin=14,12
+char_size=36,67
+canvas=64x96

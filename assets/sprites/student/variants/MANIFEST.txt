@@ -1,0 +1,18 @@
+# Drop Runway full sprites here using these exact names.
+# New base (2026-09-21 BOT): media/medio/castano/camisa — mint chroma, NN 64x96, NO HSV.
+[READY] default.png
+[READY] media_medio_castano_camisa_none.png
+[READY] media_medio_castano_hoodie_none.png
+[READY] media_medio_castano_camiseta_none.png
+[READY] media_medio_castano_chaqueta_none.png
+[READY] media_medio_castano_lab_glasses.png
+[READY] clara_corto_negro_camisa_none.png
+[READY] morena_largo_castano_camisa_none.png
+[READY] media_medio_rubio_camisa_cap.png
+[READY] oscura_recogido_azul_hoodie_backpack.png
+[READY] clara_rizado_rosa_camiseta_headphones.png
+[READY] outfit_camisa.png
+[READY] outfit_hoodie.png
+[READY] outfit_camiseta.png
+[READY] outfit_chaqueta.png
+[READY] outfit_lab.png

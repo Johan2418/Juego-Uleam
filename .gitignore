@@ -1,0 +1,29 @@
+# Godot 4
+.godot/
+*.translation
+export.cfg
+export_presets.cfg
+*.tmp
+.import/
+*.csproj
+*.sln
+.mono/
+data_*/
+# Los archivos *.import SÍ se suben: guardan el uid y la configuración de importación
+# (loop de la música, filtro de los sprites, etc.)
+
+# Carpetas de trabajo locales (pesadas o temporales)
+Claude outputs/
+_backups/
+_incoming/
+*.bak
+*.bak[0-9]
+*_backup_*
+__pycache__/
+*.tgz
+# Material de referencia pesado (videos/hojas de Runway y Grok): solo se suben los textos
+referencias_animacion/**/*.png
+referencias_animacion/**/*.jpg
+referencias_animacion/**/*.mp4
+referencias_animacion/**/*.webp
+referencias_animacion/**/*.gif

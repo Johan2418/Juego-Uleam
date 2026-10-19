@@ -1,0 +1,27 @@
+Prototipo Campus — clases de combate (Godot 4.6)
+================================================
+
+Cómo probar en Windows
+1. Descomprimir prototipo_clases_combate.zip
+2. Abrir la carpeta con Godot 4.6 (Import / Importar)
+3. F5 — arranca en el creador de personaje
+
+Flujo
+- Elige Nombre, Apariencia (look), Clase (Guerrero / Mago / Chain)
+- Confirmar → patio del campus
+
+Controles
+- WASD / flechas — mover (animación walk 4 dirs)
+- J / clic izquierdo — acción primaria
+- K / clic derecho — acción secundaria (mantener en Guerrero = escudo)
+- Esc — volver al creador
+
+Clases
+- Guerrero: J = tajo con regla; K (mantener) = alzar borrador/escudo
+- Mago: J = orbe azul; K = melee con bastón
+- Chain: J = látigo corto (rápido); K = látigo largo (más lento, hitbox más larga; MISMO sheet por ahora)
+
+Notas
+- El cuerpo animado es el set Marlon de combate; el look del creador se muestra en el HUD
+- Hay dummies rojos que parpadean al golpearlos
+- Ver assets/sprites/combat/NEEDS_FROM_USER.md para sheets pendientes

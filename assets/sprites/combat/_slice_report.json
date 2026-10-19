@@ -1,0 +1,128 @@
+{
+  "sources": {
+    "mago_cast": "/workspace/runway_2gen1/raw/Agent Image - 2D pixel art sprite sheet_ top-down 16-bit era action-RPG chibi style_ university stud (1).png",
+    "chain_whip": "/workspace/runway_2gen1/raw/Agent Image - 2D pixel art sprite sheet_ top-down 16-bit era action-RPG chibi style_ university stud (2).png",
+    "walk": "/workspace/runway_2gen1/raw/Agent Image - 2D pixel art sprite sheet_ top-down 16-bit era action-RPG chibi style_ university stud (3).png",
+    "mago_glow": "/workspace/runway_2gen1/raw/Agent Image - 2D pixel art sprite sheet_ top-down 16-bit era action-RPG chibi style_ university stud.png",
+    "mago_melee": "/workspace/runway_2gen1/raw/Agent Image - 2D pixel art sprite sheet_ top-down 16-bit era action-RPG chibi style_ university stud.png (1).png",
+    "guerrero_attack": "/workspace/runway_anim_check/Runway Agent - 19 generations/Agent Image - 2D pixel art sprite sheet_ top-down Zelda A Link to the Past  Minish Cap style_ univer.png",
+    "guerrero_guard": "/workspace/runway_anim_check/Runway Agent - 19 generations/Agent Image - 2D pixel art sprite sheet_ top-down Zelda A Link to the Past  Minish Cap style_ univer.png (10).png",
+    "mago_glow_unused": "/workspace/runway_2gen1/raw/Agent Image - 2D pixel art sprite sheet_ top-down 16-bit era action-RPG chibi style_ university stud.png"
+  },
+  "outputs": {
+    "walk": {
+      "front": {
+        "source_frames": 7,
+        "saved": [
+          "assets/sprites/combat/walk/front_0.png",
+          "assets/sprites/combat/walk/front_1.png",
+          "assets/sprites/combat/walk/front_2.png",
+          "assets/sprites/combat/walk/front_3.png"
+        ],
+        "picked": [
+          0,
+          2,
+          4,
+          6
+        ]
+      },
+      "back": {
+        "source_frames": 8,
+        "saved": [
+          "assets/sprites/combat/walk/back_0.png",
+          "assets/sprites/combat/walk/back_1.png",
+          "assets/sprites/combat/walk/back_2.png",
+          "assets/sprites/combat/walk/back_3.png"
+        ],
+        "picked": [
+          0,
+          2,
+          5,
+          7
+        ]
+      },
+      "right": {
+        "source_frames": 8,
+        "saved": [
+          "assets/sprites/combat/walk/right_0.png",
+          "assets/sprites/combat/walk/right_1.png",
+          "assets/sprites/combat/walk/right_2.png",
+          "assets/sprites/combat/walk/right_3.png"
+        ],
+        "picked": [
+          0,
+          2,
+          5,
+          7
+        ]
+      },
+      "left": {
+        "source_frames": 7,
+        "saved": [
+          "assets/sprites/combat/walk/left_0.png",
+          "assets/sprites/combat/walk/left_1.png",
+          "assets/sprites/combat/walk/left_2.png",
+          "assets/sprites/combat/walk/left_3.png"
+        ],
+        "picked": [
+          0,
+          2,
+          4,
+          6
+        ]
+      }
+    },
+    "mago_cast": {
+      "cast": [
+        "assets/sprites/combat/mago/cast_0.png",
+        "assets/sprites/combat/mago/cast_1.png",
+        "assets/sprites/combat/mago/cast_2.png",
+        "assets/sprites/combat/mago/cast_3.png",
+        "assets/sprites/combat/mago/cast_4.png"
+      ],
+      "projectile": "assets/sprites/combat/mago/projectile.png"
+    },
+    "mago_melee": {
+      "source_frames": 10,
+      "saved": [
+        "assets/sprites/combat/mago/melee_0.png",
+        "assets/sprites/combat/mago/melee_1.png",
+        "assets/sprites/combat/mago/melee_2.png",
+        "assets/sprites/combat/mago/melee_3.png",
+        "assets/sprites/combat/mago/melee_4.png",
+        "assets/sprites/combat/mago/melee_5.png"
+      ]
+    },
+    "chain": {
+      "cells": 6,
+      "kept": 6,
+      "saved": [
+        "assets/sprites/combat/chain/whip_short_0.png",
+        "assets/sprites/combat/chain/whip_short_1.png",
+        "assets/sprites/combat/chain/whip_short_2.png",
+        "assets/sprites/combat/chain/whip_short_3.png",
+        "assets/sprites/combat/chain/whip_short_4.png",
+        "assets/sprites/combat/chain/whip_short_5.png"
+      ]
+    },
+    "guerrero_attack": {
+      "source_frames": 6,
+      "attack": [
+        "assets/sprites/combat/guerrero/attack_0.png",
+        "assets/sprites/combat/guerrero/attack_1.png",
+        "assets/sprites/combat/guerrero/attack_2.png",
+        "assets/sprites/combat/guerrero/attack_3.png",
+        "assets/sprites/combat/guerrero/attack_4.png",
+        "assets/sprites/combat/guerrero/attack_5.png"
+      ]
+    },
+    "guerrero_guard": {
+      "source_frames": 5,
+      "saved": [
+        "assets/sprites/combat/guerrero/guard_0.png",
+        "assets/sprites/combat/guerrero/guard_1.png",
+        "assets/sprites/combat/guerrero/guard_idle.png"
+      ]
+    }
+  }
+}

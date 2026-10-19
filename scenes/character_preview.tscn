@@ -1,0 +1,18 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/character/character_preview.gd" id="1_preview"]
+
+[node name="CharacterPreview" type="Control"]
+custom_minimum_size = Vector2(224, 224)
+layout_mode = 3
+anchors_preset = 0
+texture_filter = 1
+script = ExtResource("1_preview")
+
+[node name="Sprite" type="TextureRect" parent="."]
+layout_mode = 0
+offset_right = 224.0
+offset_bottom = 224.0
+expand_mode = 1
+stretch_mode = 5
+texture_filter = 1

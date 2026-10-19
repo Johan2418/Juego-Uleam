@@ -1,0 +1,407 @@
+{
+  "scale": 0.20666666666666667,
+  "metas": [
+    {
+      "method": "proj_2x2",
+      "front_bbox_sheet": [
+        718,
+        84,
+        1083,
+        839
+      ],
+      "front_size": [
+        360,
+        750
+      ],
+      "special": false,
+      "seed": [
+        158.0,
+        238.5,
+        165.5
+      ]
+    },
+    {
+      "method": "proj_2x2",
+      "front_bbox_sheet": [
+        417,
+        83,
+        817,
+        854
+      ],
+      "front_size": [
+        394,
+        766
+      ],
+      "special": false,
+      "seed": [
+        157.5,
+        241.0,
+        162.5
+      ]
+    },
+    {
+      "method": "proj_2x2",
+      "front_bbox_sheet": [
+        418,
+        114,
+        782,
+        809
+      ],
+      "front_size": [
+        360,
+        690
+      ],
+      "special": false,
+      "seed": [
+        158.0,
+        236.5,
+        167.5
+      ]
+    },
+    {
+      "method": "proj_2x2",
+      "front_bbox_sheet": [
+        388,
+        54,
+        812,
+        839
+      ],
+      "front_size": [
+        420,
+        780
+      ],
+      "special": false,
+      "seed": [
+        158.0,
+        238.0,
+        165.5
+      ]
+    },
+    {
+      "method": "proj_2x2",
+      "front_bbox_sheet": [
+        387,
+        53,
+        798,
+        854
+      ],
+      "front_size": [
+        405,
+        795
+      ],
+      "special": false,
+      "seed": [
+        158.0,
+        239.0,
+        164.5
+      ]
+    },
+    {
+      "method": "proj_2x4",
+      "front_bbox_sheet": [
+        87,
+        84,
+        482,
+        854
+      ],
+      "front_size": [
+        390,
+        766
+      ],
+      "special": true,
+      "seed": [
+        156.0,
+        240.0,
+        164.5
+      ]
+    },
+    {
+      "method": "proj_2x2",
+      "front_bbox_sheet": [
+        418,
+        128,
+        783,
+        794
+      ],
+      "front_size": [
+        360,
+        660
+      ],
+      "special": false,
+      "seed": [
+        159.0,
+        239.0,
+        167.0
+      ]
+    },
+    {
+      "method": "proj_2x2",
+      "front_bbox_sheet": [
+        709,
+        85,
+        1104,
+        845
+      ],
+      "front_size": [
+        389,
+        755
+      ],
+      "special": false,
+      "seed": [
+        159.5,
+        239.5,
+        164.0
+      ]
+    },
+    {
+      "method": "proj_2x2",
+      "front_bbox_sheet": [
+        418,
+        158,
+        798,
+        868
+      ],
+      "front_size": [
+        375,
+        705
+      ],
+      "special": false,
+      "seed": [
+        158.5,
+        238.5,
+        167.0
+      ]
+    },
+    {
+      "method": "proj_2x2",
+      "front_bbox_sheet": [
+        407,
+        127,
+        796,
+        859
+      ],
+      "front_size": [
+        384,
+        726
+      ],
+      "special": false,
+      "seed": [
+        159.0,
+        238.5,
+        166.0
+      ]
+    },
+    {
+      "method": "proj_2x2",
+      "front_bbox_sheet": [
+        552,
+        68,
+        1022,
+        840
+      ],
+      "front_size": [
+        465,
+        766
+      ],
+      "special": false,
+      "seed": [
+        157.5,
+        237.5,
+        163.5
+      ]
+    },
+    {
+      "method": "proj_2x2",
+      "front_bbox_sheet": [
+        650,
+        108,
+        1032,
+        847
+      ],
+      "front_size": [
+        377,
+        733
+      ],
+      "special": false,
+      "seed": [
+        157.5,
+        239.0,
+        165.0
+      ]
+    },
+    {
+      "method": "proj_2x2",
+      "front_bbox_sheet": [
+        417,
+        113,
+        783,
+        839
+      ],
+      "front_size": [
+        360,
+        721
+      ],
+      "special": false,
+      "seed": [
+        159.0,
+        239.0,
+        167.0
+      ]
+    },
+    {
+      "method": "proj_2x2",
+      "front_bbox_sheet": [
+        403,
+        98,
+        842,
+        838
+      ],
+      "front_size": [
+        435,
+        735
+      ],
+      "special": false,
+      "seed": [
+        158.5,
+        240.0,
+        166.5
+      ]
+    },
+    {
+      "method": "proj_2x4",
+      "front_bbox_sheet": [
+        102,
+        83,
+        498,
+        839
+      ],
+      "front_size": [
+        390,
+        750
+      ],
+      "special": true,
+      "seed": [
+        159.0,
+        238.5,
+        165.0
+      ]
+    },
+    {
+      "method": "proj_2x2",
+      "front_bbox_sheet": [
+        417,
+        173,
+        782,
+        824
+      ],
+      "front_size": [
+        360,
+        645
+      ],
+      "special": false,
+      "seed": [
+        159.0,
+        238.5,
+        166.0
+      ]
+    },
+    {
+      "method": "proj_2x2",
+      "front_bbox_sheet": [
+        418,
+        173,
+        783,
+        809
+      ],
+      "front_size": [
+        361,
+        631
+      ],
+      "special": false,
+      "seed": [
+        159.0,
+        240.0,
+        164.5
+      ]
+    },
+    {
+      "method": "proj_2x2",
+      "front_bbox_sheet": [
+        388,
+        68,
+        812,
+        840
+      ],
+      "front_size": [
+        420,
+        766
+      ],
+      "special": false,
+      "seed": [
+        156.0,
+        237.5,
+        164.0
+      ]
+    },
+    {
+      "method": "proj_2x2",
+      "front_bbox_sheet": [
+        372,
+        143,
+        977,
+        839
+      ],
+      "front_size": [
+        600,
+        691
+      ],
+      "special": false,
+      "seed": [
+        157.0,
+        238.5,
+        163.0
+      ]
+    },
+    {
+      "method": "proj_2x2",
+      "front_bbox_sheet": [
+        687,
+        84,
+        1068,
+        824
+      ],
+      "front_size": [
+        375,
+        736
+      ],
+      "special": false,
+      "seed": [
+        158.5,
+        239.0,
+        166.5
+      ]
+    }
+  ],
+  "heights": [
+    750,
+    766,
+    690,
+    780,
+    795,
+    766,
+    660,
+    755,
+    705,
+    726,
+    766,
+    733,
+    721,
+    735,
+    750,
+    645,
+    631,
+    766,
+    691,
+    736
+  ]
+}
