@@ -11,6 +11,9 @@ const GameFeel := preload("res://scripts/combat/game_feel.gd")
 const StoneShader := preload("res://shaders/statue_stone.gdshader")
 
 const ARENA_SCENE := "res://scenes/combat/boss_test.tscn"
+const MENU_SCENE := "res://scenes/character_creator.tscn"
+const HALL_SCENE := "res://scenes/combat/boss_hall.tscn"
+const LOCKER_POS := Vector2(-230, 236)
 const CAMPUS_SCENE := "res://scenes/main.tscn"
 const MUSIC := "res://assets/audio/hall/hall_ambient.ogg"
 const STATUE_DIR := "res://assets/sprites/statues/statue_%s.png"
@@ -41,6 +44,8 @@ var _focus: Statue = null
 var _going := false
 var _ui: HallUi
 var _exit_near := false
+var _locker_near := false
+var _locker: Locker
 var _music: AudioStreamPlayer
 
 
@@ -67,6 +72,9 @@ func _ready() -> void:
 	var door := ExitDoor.new()
 	door.position = Vector2(0, HALL.end.y - 6)
 	add_child(door)
+	_locker = Locker.new()
+	_locker.position = LOCKER_POS
+	add_child(_locker)
 	_build_walls()
 	# jugador
 	player = PlayerScene.instantiate()
@@ -167,6 +175,8 @@ func _process(delta: float) -> void:
 		else:
 			_ui.hide_statue()
 	_exit_near = absf(pf.x) < 90.0 and pf.y > HALL.end.y - 70.0
+	_locker_near = pf.distance_to(LOCKER_POS) < 85.0 and not _exit_near
+	_locker.near = _locker_near and not _going
 	_ui.set_exit_prompt(_exit_near and not _going)
 	# el jugador queda en penumbra salvo bajo los haces de luz
 	var light := 0.5
@@ -190,6 +200,11 @@ func _unhandled_input(event: InputEvent) -> void:
 		elif _exit_near:
 			get_viewport().set_input_as_handled()
 			_leave(CAMPUS_SCENE, Color.BLACK)
+		elif _locker_near:
+			get_viewport().set_input_as_handled()
+			var menu_script = load("res://scripts/ui/character_menu.gd")
+			menu_script.return_scene = HALL_SCENE
+			_leave(MENU_SCENE, Color.BLACK)
 
 
 func _challenge(st: Statue) -> void:
@@ -496,6 +511,42 @@ class ExitDoor extends Node2D:
 
 
 # ==================================================================================
+## Casillero junto a la entrada: abre el menú del personaje (clase y técnicas).
+class Locker extends Node2D:
+	var near := false
+	var t := 0.0
+
+	func _ready() -> void:
+		z_index = -4
+
+	func _process(delta: float) -> void:
+		t += delta
+		queue_redraw()
+
+	func _draw() -> void:
+		var f := ThemeDB.fallback_font
+		# casillero metálico de dos puertas con una luz encima
+		var glow := 0.35 + 0.15 * sin(t * 2.0) + (0.3 if near else 0.0)
+		draw_polygon(PackedVector2Array([Vector2(-24, -150), Vector2(24, -150), Vector2(70, -2), Vector2(-70, -2)]),
+			PackedColorArray([Color(0.9, 0.85, 0.6, 0.0), Color(0.9, 0.85, 0.6, 0.0), Color(0.9, 0.85, 0.6, 0.10 * glow), Color(0.9, 0.85, 0.6, 0.10 * glow)]))
+		draw_rect(Rect2(-40, -96, 80, 96), Color(0.14, 0.16, 0.2))
+		draw_rect(Rect2(-40, -96, 80, 96), Color(0.03, 0.03, 0.04), false, 2.0)
+		draw_line(Vector2(0, -94), Vector2(0, -2), Color(0.05, 0.05, 0.06), 2.0)
+		for sx in [-1.0, 1.0]:
+			for k in 3:
+				draw_line(Vector2(sx * 20 - 10, -86 + k * 5), Vector2(sx * 20 + 10, -86 + k * 5), Color(0.05, 0.05, 0.07), 2.0)
+			draw_rect(Rect2(sx * 6 - 2, -50, 4, 10), Color(0.6, 0.55, 0.4))
+		draw_rect(Rect2(-24, -66, 48, 12), Color(0.85, 0.8, 0.6, 0.85))
+		draw_string(f, Vector2(-24, -57), "TÉCNICAS", HORIZONTAL_ALIGNMENT_CENTER, 48, 8, Color(0.1, 0.1, 0.12))
+		if near:
+			var y := -128.0 + sin(t * 5.0) * 2.0
+			var txt := "%s  personaje y técnicas" % GameState.btn("interact")
+			draw_rect(Rect2(-95, y, 190, 22), Color(0, 0, 0, 0.75))
+			draw_rect(Rect2(-95, y, 190, 22), Color(0.86, 0.74, 0.46, 0.7), false, 1.5)
+			draw_string(f, Vector2(-95, y + 16), txt, HORIZONTAL_ALIGNMENT_CENTER, 190, 13, Color(1, 0.95, 0.75))
+
+
+# ==================================================================================
 ## Oscurece los bordes de la pantalla.
 class Vignette extends CanvasLayer:
 	func _ready() -> void:
@@ -564,7 +615,7 @@ class HallUi extends CanvasLayer:
 		_exit.visible = false
 		add_child(_exit)
 		var hint := Label.new()
-		hint.text = "Acércate a una estatua y pulsa %s para desafiarla  ·  %s volver al campus" % [GameState.btn("interact"), GameState.btn("back")]
+		hint.text = "Acércate a una estatua y pulsa %s para desafiarla  ·  casillero de la entrada: clase y técnicas  ·  %s volver al campus" % [GameState.btn("interact"), GameState.btn("back")]
 		hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		hint.size = Vector2(1280, 20)
 		hint.position = Vector2(0, 694)

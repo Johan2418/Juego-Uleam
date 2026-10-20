@@ -21,6 +21,7 @@ const InputSetup := preload("res://scripts/input_setup.gd")
 const GameFeel := preload("res://scripts/combat/game_feel.gd")
 const PlayerHudScript := preload("res://scripts/combat/player_hud.gd")
 const LockOnScript := preload("res://scripts/combat/lock_on.gd")
+const Tech := preload("res://scripts/combat/techniques.gd")
 const AFTERIMAGE_EVERY := 0.045   ## fantasmas al rodar
 const RECOVER_HOLD := 0.08        ## mantiene el último frame del ataque antes del reposo
 const MAX_HP := 10
@@ -75,6 +76,8 @@ var rolling: bool = false
 var running: bool = false
 var _run_dust: float = 0.0
 var invulnerable: bool = false
+## Escudo temporal (técnica Corte comercial): nada hace daño mientras dure.
+var _shield_left: float = 0.0
 var _lock_anim: bool = false
 var _roll_dir: Vector2 = Vector2.DOWN
 var _roll_left: float = 0.0
@@ -351,7 +354,7 @@ func _stop_run() -> void:
 
 
 func take_hit(amount: int, from: Vector2, unblockable: bool = false) -> void:
-	if invulnerable or _ult_active or _iframes_left > 0.0 or _knocked_down:
+	if invulnerable or _ult_active or _iframes_left > 0.0 or _knocked_down or _shield_left > 0.0:
 		return
 	# el parry solo cubre el frente: un golpe por la espalda o el costado entra igual
 	if not unblockable and class_controller and class_controller.parrying and class_controller.parry_covers(from):
@@ -360,6 +363,8 @@ func take_hit(amount: int, from: Vector2, unblockable: bool = false) -> void:
 	hp = maxi(0, hp - amount)
 	hp_changed.emit(hp, MAX_HP)
 	hurt.emit(amount)
+	if class_controller and class_controller.has_method("on_player_hurt"):
+		class_controller.on_player_hurt()
 	_stop_run()
 	if class_controller and class_controller.busy:
 		class_controller.cancel_action()
@@ -381,7 +386,28 @@ func take_hit(amount: int, from: Vector2, unblockable: bool = false) -> void:
 		_play("flinch", true, 1.0)
 
 
+## Recupera corazones (técnicas Parásito y Desfibrilador).
+func heal(amount: int) -> void:
+	if hp >= MAX_HP or _knocked_down:
+		return
+	var before := hp
+	hp = mini(MAX_HP, hp + amount)
+	hp_changed.emit(hp, MAX_HP)
+	Tech.float_text(get_parent(), global_position + Vector2(0, -96), "+%d vida" % (hp - before), Color(0.45, 1.0, 0.5), 18)
+	GameFeel.flash(anim, 0.18, Color(0.6, 1.0, 0.6))
+
+
+## Escudo de unos segundos: no se recibe daño (Corte comercial).
+func shield(time: float) -> void:
+	_shield_left = maxf(_shield_left, time)
+
+
 func _update_hurt(delta: float) -> void:
+	if _shield_left > 0.0:
+		_shield_left -= delta
+		anim.modulate = Color(1.0, 0.95, 0.75) if fmod(_shield_left * 6.0, 1.0) > 0.5 else Color.WHITE
+		if _shield_left <= 0.0:
+			anim.modulate = Color.WHITE
 	if _iframes_left > 0.0:
 		_iframes_left -= delta
 		anim.modulate.a = 0.45 if fmod(_iframes_left * 14.0, 1.0) > 0.5 else 1.0
@@ -508,8 +534,13 @@ func _on_attack_started(kind: String) -> void:
 	_idle_time = 0.0
 	_ult_active = kind.ends_with("_ultimate")
 	var base: String = ATTACK_ANIMS.get(kind, "guerrero_attack")
+	if kind.begins_with("tech_"):
+		base = Tech.fallback_anim(kind.trim_prefix("tech_").trim_suffix("_ultimate"), class_controller.class_id)
 	# la acción fija la dirección (diagonal solo si existe su hoja); el reposo posterior la conserva
 	_walk_dir = _action_dir(base)
+	if kind.begins_with("tech_"):
+		# hoja propia de la técnica (Grok) si existe en esta dirección
+		base = Tech.anim_base(kind, class_controller.class_id, anim.sprite_frames, str(_walk_dir[0]))
 	var name := "%s_%s" % [base, _walk_dir[0]]
 	var speed := 1.0
 	if anim.sprite_frames and anim.sprite_frames.has_animation(name):

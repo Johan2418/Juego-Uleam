@@ -59,7 +59,8 @@ static func kind_of(boss: Node) -> String:
 	return "deadbeef"
 
 
-static func _alive(boss: Node, tok: int) -> bool:
+## (sin tipo: si se sale de la arena en plena lluvia, boss ya puede estar liberado)
+static func _alive(boss: Variant, tok: int) -> bool:
 	return is_instance_valid(boss) and boss.is_inside_tree() and int(boss.get("_tok")) == tok
 
 
@@ -95,7 +96,8 @@ static func run(boss: Node2D, phase: int, tok: int) -> bool:
 		if not _alive(boss, tok):
 			if is_instance_valid(barrier):
 				barrier.queue_free()
-			_clear(boss)
+			if is_instance_valid(boss):
+				_clear(boss)
 			return false
 		t += 0.05
 		barrier.left = dur - t

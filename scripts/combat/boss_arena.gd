@@ -518,6 +518,13 @@ func _on_victory() -> void:
 	GameState.record_victory(boss_kind, rank, secs)   # el salón dora la estatua
 	_end_sub.text = "Rango %s  ·  Tiempo %d:%02d  ·  Golpes recibidos %d  ·  Golpes al punto débil %d\n%s" % [rank, secs / 60, secs % 60, _hits_taken, _weak_hits, _end_keys("repetir")]
 	_end_sub.size.y = 60
+	# primera victoria: avisa la técnica que se acaba de conseguir
+	if GameState.last_won == boss_kind:
+		var Tech = load("res://scripts/combat/techniques.gd")
+		for id in Tech.DATA.keys():
+			if Tech.DATA[id]["boss"] == boss_kind:
+				_end_sub.text = "¡NUEVA TÉCNICA! %s (%s) · equípala en el casillero del salón\n" % [Tech.DATA[id]["name"], str(Tech.SLOT_LABEL[Tech.DATA[id]["slot"]]).to_lower()] + _end_sub.text
+				_end_sub.size.y = 84
 	_end_box.visible = true
 
 

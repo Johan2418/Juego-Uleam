@@ -17,6 +17,9 @@ const RANK_ORDER := "CBAS"
 var bosses_defeated: Dictionary = {}
 ## Boss recién vencido: el salón dora su estatua al volver.
 var last_won: String = ""
+## Técnicas equipadas por clase: "guerrero" -> {"combo": id, "special": id, "ultimate": id}; "" = la de serie.
+## Las técnicas salen de scripts/combat/techniques.gd y se desbloquean al vencer a su boss.
+var loadout: Dictionary = {}
 
 
 func _ready() -> void:
@@ -105,6 +108,10 @@ func save_progress() -> void:
 	for k in bosses_defeated.keys():
 		var d: Dictionary = bosses_defeated[k]
 		cfg.set_value("defeated", str(k), "%s|%d" % [d.get("rank", "C"), int(d.get("time", 0))])
+	for c in loadout.keys():
+		var lo: Dictionary = loadout[c]
+		for slot in lo.keys():
+			cfg.set_value("loadout", "%s.%s" % [c, slot], str(lo[slot]))
 	var err := cfg.save(PROGRESS_PATH)
 	if err != OK:
 		push_warning("GameState: no se pudo guardar el progreso (%s)" % error_string(err))
@@ -112,9 +119,48 @@ func save_progress() -> void:
 
 func load_progress() -> void:
 	bosses_defeated.clear()
+	loadout.clear()
 	var cfg := ConfigFile.new()
-	if cfg.load(PROGRESS_PATH) != OK or not cfg.has_section("defeated"):
+	if cfg.load(PROGRESS_PATH) != OK:
+		return
+	if cfg.has_section("loadout"):
+		for key in cfg.get_section_keys("loadout"):
+			var parts2 := str(key).split(".")
+			if parts2.size() == 2:
+				if not loadout.has(parts2[0]):
+					loadout[parts2[0]] = {}
+				loadout[parts2[0]][parts2[1]] = str(cfg.get_value("loadout", key, ""))
+	if not cfg.has_section("defeated"):
 		return
 	for k in cfg.get_section_keys("defeated"):
 		var parts := str(cfg.get_value("defeated", k, "C|0")).split("|")
 		bosses_defeated[k] = {"rank": parts[0], "time": int(parts[1]) if parts.size() > 1 else 0}
+
+
+# --- Técnicas equipadas ------------------------------------------------------------
+
+const Techniques := preload("res://scripts/combat/techniques.gd")
+
+
+## ¿Ya se consiguió esta técnica? (se vence a su boss)
+func tech_unlocked(id: String) -> bool:
+	if id == "":
+		return true
+	var d: Dictionary = Techniques.info(id)
+	return not d.is_empty() and is_defeated(str(d["boss"]))
+
+
+## Técnica equipada en una ranura de una clase ("" = la de serie). Si dejó de estar disponible, vuelve a la de serie.
+func equipped(class_id: String, slot: String) -> String:
+	var lo: Dictionary = loadout.get(class_id, {})
+	var id := str(lo.get(slot, ""))
+	if id != "" and (not tech_unlocked(id) or str(Techniques.info(id).get("slot", "")) != slot):
+		return ""
+	return id
+
+
+func equip(class_id: String, slot: String, id: String) -> void:
+	if not loadout.has(class_id):
+		loadout[class_id] = {}
+	loadout[class_id][slot] = id
+	save_progress()

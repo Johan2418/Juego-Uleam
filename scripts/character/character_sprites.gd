@@ -187,6 +187,13 @@ static func build_frames(id: String) -> SpriteFrames:
 			for i in [0, 1, 2, 3, 3, 4, 4, 5, 5, 6, 7]:
 				ilseq.append(il[i])
 			_add(frames, "idle_long_%s" % d, ilseq, 4.0, false)
+	# Técnicas de los bosses con hoja propia de 8 poses (tech_<id>8_<dir>, GROKBOT_TECNICAS.md).
+	# Se dibujan con el arma a la espalda: sirven para las 3 clases (techniques.gd las busca como "tech_<id>").
+	for tid in ["desfibrilador", "pushpop", "comercial"]:
+		for d in WALK_DIRS:
+			var t8 := _sequence(id, "tech_%s8" % tid, d)
+			if t8.size() >= 8:
+				_add(frames, "tech_%s_%s" % [tid, d], t8, 12.0, false)
 	# Ultimates (secuencias armadas con poses de varias hojas; duran lo que la acción)
 	for d in WALK_DIRS:
 		var ult := _sequence(id, "guerrero_ultimate", d)

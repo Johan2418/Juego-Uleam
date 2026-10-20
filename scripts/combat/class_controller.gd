@@ -4,6 +4,8 @@ extends Node
 const CombatSpriteLoader := preload("res://scripts/combat/combat_sprite_loader.gd")
 const UltFx := preload("res://scripts/combat/ult_fx.gd")
 const GameFeel := preload("res://scripts/combat/game_feel.gd")
+const Tech := preload("res://scripts/combat/techniques.gd")
+const LockOn := preload("res://scripts/combat/lock_on.gd")
 ## Mapea primary/secondary a la clase actual del jugador.
 ## Primary (J) = combo de 3 golpes: golpe 1, golpe 2 y remate. Pulsar J durante un golpe
 ## lo deja en cola; si pasa COMBO_WINDOW sin pulsar, el combo vuelve al golpe 1.
@@ -76,6 +78,17 @@ var _hit_active: bool = false
 var _hit_targets: Dictionary = {}
 var _action_token: int = 0
 
+## Técnicas equipadas (techniques.gd): "" = la de serie de la clase.
+var tech: Dictionary = {"combo": "", "special": "", "ultimate": ""}
+var _cur_kind: String = ""
+var _parasite_used: bool = false
+var _interest: int = 0
+var _interest_idle: float = 0.0
+var _badge: Node2D = null
+## Enemigos marcados con la tiza: instance_id -> segundo (de juego) en que vence la marca.
+var _marks: Dictionary = {}
+var _objection: bool = false
+
 
 func setup(p_player: CharacterBody2D, p_anim: AnimatedSprite2D, p_hitbox: Area2D) -> void:
 	player = p_player
@@ -89,6 +102,13 @@ func setup(p_player: CharacterBody2D, p_anim: AnimatedSprite2D, p_hitbox: Area2D
 
 func set_class(id: String) -> void:
 	class_id = CharacterAppearance.normalize_class_id(id)
+	load_loadout()
+
+
+## Lee de GameState las técnicas equipadas para esta clase.
+func load_loadout() -> void:
+	for slot in Tech.SLOTS:
+		tech[slot] = GameState.equipped(class_id, slot) if GameState else ""
 
 
 func set_facing(dir: Vector2) -> void:
@@ -125,6 +145,8 @@ func _do_combo_step() -> void:
 	if _now() > _combo_deadline:
 		combo_step = 0
 	var step := combo_step
+	if step == 0:
+		_parasite_used = false
 	combo_step = (combo_step + 1) % 3
 	_in_primary = true
 	_combo_buffered = false
@@ -175,6 +197,17 @@ func try_secondary_pressed() -> void:
 	if busy or guarding:
 		return
 	if _now() < special_ready_at:
+		return
+	var sp := str(tech.get("special", ""))
+	if sp != "":
+		special_ready_at = _now() + float(Tech.info(sp).get("cooldown", 3.0))
+		match sp:
+			"objecion":
+				_tech_objection()
+			"tiza":
+				_tech_chalk()
+			"glitch":
+				_tech_glitch()
 		return
 	special_ready_at = _now() + float(SPECIAL_COOLDOWN.get(class_id, 3.0))
 	match class_id:
@@ -235,6 +268,9 @@ func on_parried(from: Vector2) -> void:
 	GameFeel.hit_stop(player.get_tree(), 0.12, 0.02)
 	_shake(4.0, 0.18)
 	parried.emit(from)
+	if _objection:
+		_objection_release()
+		return
 	# ya NO contraataca solo: abre la ventana para que el jugador pulse ataque
 	_counter_until = _now() + COUNTER_WINDOW
 
@@ -277,6 +313,16 @@ func try_ultimate() -> void:
 		return
 	ultimate_meter = 0.0
 	meter_changed.emit(ultimate_meter)
+	match str(tech.get("ultimate", "")):
+		"desfibrilador":
+			_tech_defib()
+			return
+		"pushpop":
+			_tech_pushpop()
+			return
+		"comercial":
+			_tech_commercial()
+			return
 	match class_id:
 		"mago":
 			_ult_lightning()
@@ -449,7 +495,7 @@ func _body_of(e: Node) -> Vector2:
 
 
 func _hit_node(e: Node, damage: int) -> void:
-	e.call("take_hit", damage, player.global_position)
+	e.call("take_hit", _marked_damage(e, damage), player.global_position)
 	var parent := player.get_parent()
 	if parent:
 		var spark := SlashFx.HitSpark.new()
@@ -489,6 +535,7 @@ func _start_melee(kind: String, damage: int, reach: float, thickness: float,
 	_action_token += 1
 	var token := _action_token
 	busy = true
+	_cur_kind = kind
 	_hit_damage = damage
 	_hit_pull = pull
 	_hit_gives_meter = true
@@ -518,6 +565,7 @@ func _start_cast(kind: String, cast_delay: float, recover: float) -> void:
 	_action_token += 1
 	var token := _action_token
 	busy = true
+	_cur_kind = kind
 	action_time = cast_delay + recover
 	attack_started.emit(kind)
 	await player.get_tree().create_timer(cast_delay).timeout
@@ -535,6 +583,7 @@ func _start_fan(kind: String, cast_delay: float, recover: float) -> void:
 	_action_token += 1
 	var token := _action_token
 	busy = true
+	_cur_kind = kind
 	action_time = cast_delay + recover
 	attack_started.emit(kind)
 	await player.get_tree().create_timer(cast_delay).timeout
@@ -593,6 +642,7 @@ func _start_area(kind: String, damage: int, radius: float, active_delay: float,
 	_action_token += 1
 	var token := _action_token
 	busy = true
+	_cur_kind = kind
 	_hit_damage = damage
 	_hit_pull = false
 	_hit_gives_meter = gives_meter
@@ -632,6 +682,7 @@ func cancel_action() -> void:
 	lunge_velocity = Vector2.ZERO
 	busy = false
 	parrying = false
+	_objection = false
 	_counter_until = 0.0
 	mobile_speed = 0.0
 	if _ult_fx != null and is_instance_valid(_ult_fx):
@@ -661,6 +712,7 @@ func _spawn_projectile(dir_override: Vector2 = Vector2.ZERO) -> void:
 	if proj.has_method("setup"):
 		proj.call("setup", dir, CombatSpriteLoader.load_projectile_texture())
 	proj.set("source", self)
+	proj.set("from_combo", _in_primary)
 
 
 ## Tajo blanco dibujado sobre la hitbox activa: lo que se ve es exactamente lo que daña.
@@ -796,7 +848,12 @@ func _apply_hit(node: Node) -> void:
 		return
 	if node.has_method("take_hit"):
 		_hit_targets[id] = true
-		node.call("take_hit", _hit_damage, player.global_position)
+		var dmg := _hit_damage
+		if _in_primary:
+			dmg += _interest_bonus()
+		node.call("take_hit", _marked_damage(node, dmg), player.global_position)
+		if _in_primary:
+			_combo_landed(node)
 		_spawn_spark(node)
 		if _hit_damage > 1:
 			_shake(2.5, 0.12)
@@ -837,3 +894,340 @@ class Shockwave extends Node2D:
 
 func _process(delta: float) -> void:
 	_game_t += delta
+	if _interest > 0:
+		_interest_idle += delta
+		if _interest_idle > INTEREST_IDLE:
+			_set_interest(0)
+
+
+# ==================================================================================
+# --- Técnicas de los bosses (techniques.gd) -----------------------------------------
+
+const INTEREST_IDLE := 2.0
+const INTEREST_MAX := 4
+const MARK_TIME := 5.0
+
+
+## Punto al que apuntar en un enemigo (centro de su zona golpeable).
+func aim_of(e: Node) -> Vector2:
+	if e is Node2D:
+		return LockOn.aim_point(e as Node2D)
+	return Vector2.ZERO
+
+
+func _marked_damage(e: Node, dmg: int) -> int:
+	var id := e.get_instance_id()
+	if _marks.has(id):
+		if float(_marks[id]) > _game_t:
+			return dmg * 2
+		_marks.erase(id)
+	return dmg
+
+
+func mark_enemy(e: Node) -> void:
+	_marks[e.get_instance_id()] = _game_t + MARK_TIME
+	var m := Tech.Mark.new()
+	m.target = e as Node2D
+	m.ctrl = self
+	m.life = MARK_TIME
+	player.get_parent().add_child(m)
+	Tech.float_text(player.get_parent(), aim_of(e) + Vector2(0, -50), "¡MARCADO!", Color(1, 0.4, 0.35))
+
+
+## Golpe de un orbe del mago (aplica marca e interés como los golpes cuerpo a cuerpo).
+func projectile_hit(node: Node, dmg: int, _at: Vector2, from_combo: bool) -> void:
+	var d := dmg
+	if from_combo:
+		d += _interest_bonus()
+	node.call("take_hit", _marked_damage(node, d), player.global_position)
+	if from_combo:
+		_combo_landed(node)
+
+
+func _interest_bonus() -> int:
+	if str(tech.get("combo", "")) != "interes":
+		return 0
+	return 2 if _interest >= 4 else (1 if _interest >= 2 else 0)
+
+
+## Un golpe del combo acertó: Parásito (remate) o Interés compuesto (suma moneda).
+func _combo_landed(node: Node) -> void:
+	match str(tech.get("combo", "")):
+		"interes":
+			_set_interest(mini(INTEREST_MAX, _interest + 1))
+		"parasito":
+			if _cur_kind.ends_with("finisher") and not _parasite_used:
+				_parasite_used = true
+				var dr := Tech.Drain.new()
+				dr.from = aim_of(node)
+				dr.target = player
+				player.get_parent().add_child(dr)
+				if player.has_method("heal"):
+					player.call("heal", 1)
+
+
+func _set_interest(n: int) -> void:
+	if n < _interest and _interest > 0 and n == 0:
+		Tech.float_text(player.get_parent(), player.global_position + Vector2(0, -110), "−$", Color(1, 0.4, 0.3), 16)
+	_interest = n
+	_interest_idle = 0.0
+	if _badge == null or not is_instance_valid(_badge):
+		_badge = Tech.InterestBadge.new()
+		_badge.position = Vector2(0, -112)
+		player.add_child(_badge)
+	_badge.call("set_stacks", n)
+
+
+## El jugador recibió un golpe: se pierde el interés.
+func on_player_hurt() -> void:
+	if _interest > 0:
+		_set_interest(0)
+
+
+# --- Especiales -------------------------------------------------------------------
+
+const OBJECTION_TIME := 1.0
+const OBJECTION_RADIUS := 170.0
+
+func _tech_objection() -> void:
+	_action_token += 1
+	var token := _action_token
+	var kind := "tech_objecion"
+	busy = true
+	parrying = true
+	_objection = true
+	_parry_started = _game_t
+	_parry_hit = false
+	action_time = OBJECTION_TIME
+	attack_started.emit(kind)
+	_spawn_parry_fx(OBJECTION_TIME)
+	Tech.float_text(player.get_parent(), player.global_position + Vector2(0, -100), "¡PROTESTO!", Color(1, 0.5, 0.4), 15)
+	await player.get_tree().create_timer(OBJECTION_TIME).timeout
+	if token != _action_token:
+		return
+	parrying = false
+	_objection = false
+	_finish(kind)
+
+
+## La postura bloqueó algo: onda en cono que daña al frente.
+func _objection_release() -> void:
+	_objection = false
+	parrying = false
+	var origin := player.global_position + Vector2(0.0, center_y)
+	var cw := Tech.ConeWave.new()
+	cw.dir = facing
+	cw.radius = OBJECTION_RADIUS
+	player.get_parent().add_child(cw)
+	cw.global_position = origin
+	for e in _enemies():
+		var v: Vector2 = aim_of(e) - origin
+		if v.length() < OBJECTION_RADIUS + 40.0 and v.normalized().dot(facing) > cos(1.0):
+			_hit_node(e, 3)
+	_shake(6.0, 0.3)
+	GameFeel.hit_stop(player.get_tree(), 0.08)
+	# termina la postura enseguida
+	_action_token += 1
+	var kind := "tech_objecion"
+	var tok := _action_token
+	await player.get_tree().create_timer(0.2).timeout
+	if tok == _action_token:
+		_finish(kind)
+
+
+func _tech_chalk() -> void:
+	_action_token += 1
+	var token := _action_token
+	var kind := "tech_tiza"
+	busy = true
+	action_time = 0.32
+	attack_started.emit(kind)
+	await player.get_tree().create_timer(0.1).timeout
+	if token != _action_token:
+		return
+	var ch := Tech.ChalkShot.new()
+	ch.ctrl = self
+	ch.dir = facing
+	player.get_parent().add_child(ch)
+	ch.global_position = player.global_position + Vector2(0.0, center_y) + facing * 26.0
+	await player.get_tree().create_timer(0.22).timeout
+	if token != _action_token:
+		return
+	_finish(kind)
+
+
+const GLITCH_DIST := 190.0
+
+func _tech_glitch() -> void:
+	_action_token += 1
+	var token := _action_token
+	var kind := "tech_glitch"
+	busy = true
+	action_time = 0.3
+	attack_started.emit(kind)
+	var from := player.global_position
+	# destino: detrás del objetivo fijado, o hacia donde mira
+	var dest := from + facing * GLITCH_DIST
+	var lk: Node = player.get("lock")
+	if lk and bool(lk.call("active")):
+		var tg: Node2D = lk.get("target")
+		var away := (tg.global_position - from)
+		if away.length() > 1.0:
+			dest = tg.global_position + away.normalized() * 90.0
+	dest = _free_spot(from, dest)
+	# la copia que explota se queda donde estaba el jugador
+	var dc := Tech.Decoy.new()
+	dc.ctrl = self
+	if anim and anim.sprite_frames and anim.sprite_frames.has_animation(anim.animation):
+		dc.tex = anim.sprite_frames.get_frame_texture(anim.animation, anim.frame)
+		dc.flip = anim.flip_h
+		dc.offset = anim.position
+		dc.scale_k = anim.scale
+	player.get_parent().add_child(dc)
+	dc.global_position = from
+	player.set("invulnerable", true)
+	GameFeel.afterimage(player.get_parent(), anim, Color(1, 0.3, 1))
+	player.global_position = dest
+	GameFeel.afterimage(player.get_parent(), anim, Color(1, 0.3, 1))
+	await player.get_tree().create_timer(0.3).timeout
+	player.set("invulnerable", false)
+	if token != _action_token:
+		return
+	_finish(kind)
+
+
+## Punto libre más lejano en el camino hacia dest (no queda dentro de una pared ni del boss).
+func _free_spot(from: Vector2, dest: Vector2) -> Vector2:
+	var steps := 12
+	for i in steps + 1:
+		var p := dest.lerp(from, float(i) / steps)
+		var tr := Transform2D(0.0, p)
+		if not player.test_move(tr, Vector2(0, 0.5)) and not player.test_move(tr, Vector2(0, -0.5)):
+			return p
+	return from
+
+
+func glitch_boom(at: Vector2) -> void:
+	for e in _enemies():
+		if aim_of(e).distance_to(at) < 95.0 or (e as Node2D).global_position.distance_to(at) < 80.0:
+			_hit_node(e, 2)
+	_shake(4.0, 0.2)
+
+
+## Daño en un círculo (bloques de Push / Pop).
+func area_damage(at: Vector2, radius: float, dmg: int) -> void:
+	for e in _enemies():
+		var feet := (e as Node2D).global_position
+		if Vector2(feet.x - at.x, (feet.y - at.y) * 1.6).length() < radius + 40.0:
+			_hit_node(e, dmg)
+
+
+# --- Ultimates ------------------------------------------------------------------------
+
+const DEFIB_CHARGE := 0.6
+const DEFIB_RADIUS := 170.0
+
+func _tech_defib() -> void:
+	_action_token += 1
+	var token := _action_token
+	var kind := "tech_desfibrilador_ultimate"
+	busy = true
+	action_time = DEFIB_CHARGE + 0.5
+	attack_started.emit(kind)
+	var ring := Tech.ShockRing.new()
+	ring.target = player
+	ring.radius = DEFIB_RADIUS
+	ring.charge = DEFIB_CHARGE
+	player.get_parent().add_child(ring)
+	Tech.float_text(player.get_parent(), player.global_position + Vector2(0, -105), "CARGANDO...", Color(0.6, 0.85, 1.0), 14)
+	await player.get_tree().create_timer(DEFIB_CHARGE).timeout
+	if token != _action_token:
+		return
+	Tech.float_text(player.get_parent(), player.global_position + Vector2(0, -105), "¡CLEAR!", Color(1, 1, 0.5), 22)
+	var c := player.global_position + Vector2(0, -20)
+	for e in _enemies():
+		var feet := (e as Node2D).global_position
+		if feet.distance_to(c) < DEFIB_RADIUS + 50.0 or aim_of(e).distance_to(c) < DEFIB_RADIUS + 30.0:
+			_hit_node(e, 3)
+	if player.has_method("heal"):
+		player.call("heal", 2)
+	_shake(8.0, 0.35)
+	GameFeel.flash(anim, 0.25, Color(0.7, 0.9, 1.0))
+	await player.get_tree().create_timer(0.5).timeout
+	if token != _action_token:
+		return
+	_finish(kind)
+
+
+func _tech_pushpop() -> void:
+	_action_token += 1
+	var token := _action_token
+	var kind := "tech_pushpop_ultimate"
+	busy = true
+	action_time = 0.6
+	attack_started.emit(kind)
+	# blancos: el objetivo fijado (si hay) y si no los enemigos más cercanos; si no hay nadie, al frente
+	var targets: Array = []
+	var lk: Node = player.get("lock")
+	if lk and bool(lk.call("active")):
+		targets.append(lk.get("target"))
+	var near := _enemies()
+	near.sort_custom(func(a: Node, b: Node) -> bool:
+		return (a as Node2D).global_position.distance_to(player.global_position) < (b as Node2D).global_position.distance_to(player.global_position))
+	for e in near:
+		if not targets.has(e) and (e as Node2D).global_position.distance_to(player.global_position) < 700.0:
+			targets.append(e)
+	var parent := player.get_parent()
+	for i in 4:
+		var big := i == 3
+		var at: Vector2
+		if targets.is_empty():
+			at = player.global_position + facing * (120.0 + 40.0 * i)
+		else:
+			var tg: Node2D = targets[0 if big else i % targets.size()]
+			at = tg.global_position + (Vector2.ZERO if big else Vector2(randf_range(-20, 20), randf_range(-8, 8)))
+		var fb := Tech.FallBlock.new()
+		fb.ctrl = self
+		fb.big = big
+		fb.text = "POP" if big else "PUSH"
+		fb.damage = 4 if big else 2
+		fb.radius = 90.0 if big else 60.0
+		fb.col = [Color(0.95, 0.75, 0.2), Color(0.3, 0.75, 0.95), Color(0.55, 0.9, 0.45), Color(0.95, 0.4, 0.3)][i]
+		fb.warn = 0.45 if not big else 0.6
+		parent.add_child(fb)
+		fb.global_position = at
+		await player.get_tree().create_timer(0.3 if i < 2 else 0.4).timeout
+		if i == 1 and token == _action_token:
+			_finish(kind)   # el jugador ya puede moverse; los bloques siguen cayendo
+
+
+const COMMERCIAL_TIME := 3.0
+
+func _tech_commercial() -> void:
+	_action_token += 1
+	var token := _action_token
+	var kind := "tech_comercial_ultimate"
+	busy = true
+	action_time = 0.5
+	attack_started.emit(kind)
+	var scr := Tech.CommercialScreen.new()
+	scr.life = COMMERCIAL_TIME
+	player.get_parent().add_child(scr)
+	if player.has_method("shield"):
+		player.call("shield", COMMERCIAL_TIME)
+	await player.get_tree().create_timer(0.5).timeout
+	if token == _action_token:
+		_finish(kind)
+	await player.get_tree().create_timer(COMMERCIAL_TIME - 0.5).timeout
+	if not is_instance_valid(player):
+		return
+	# "¡volvemos al aire!": golpe a todos los enemigos en pantalla
+	var view := player.get_viewport().get_visible_rect()
+	var cam := player.get_node_or_null("Camera2D") as Camera2D
+	var center := cam.get_screen_center_position() if cam else player.global_position
+	var half := view.size * 0.5 / (cam.zoom if cam else Vector2.ONE)
+	for e in _enemies():
+		var p := (e as Node2D).global_position
+		if absf(p.x - center.x) < half.x + 40.0 and absf(p.y - center.y) < half.y + 80.0:
+			_hit_node(e, 3)
+	_shake(6.0, 0.3)

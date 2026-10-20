@@ -8,6 +8,8 @@ extends Area2D
 var direction: Vector2 = Vector2.RIGHT
 ## Quién lo disparó (ClassController): recibe carga de ultimate al acertar.
 var source: Node = null
+## true si salió del combo (cuenta para técnicas de combo como Interés compuesto).
+var from_combo: bool = false
 var _age: float = 0.0
 
 
@@ -46,7 +48,11 @@ func _on_area_entered(area: Area2D) -> void:
 
 func _try_hit(node: Node) -> void:
 	if node and node.has_method("take_hit"):
-		node.take_hit(damage, global_position)
+		if source and is_instance_valid(source) and source.has_method("projectile_hit"):
+			# el ClassController aplica las técnicas (marca de tiza, interés...)
+			source.call("projectile_hit", node, damage, global_position, from_combo)
+		else:
+			node.take_hit(damage, global_position)
 		if source and source.has_method("_add_meter"):
 			source.call("_add_meter", 6.0)
 		queue_free()

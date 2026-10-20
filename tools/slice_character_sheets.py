@@ -37,12 +37,17 @@ ANIMS = ["idle", "walk", "roll", "guerrero_attack", "mago_cast", "chain_whip",
          "walk8", "guerrero_attack8", "mago_cast8", "chain_whip8",
          # pulido 3 (GROKBOT_PULIDO_3.md): derribo, reposo largo, contraataque, especial/parry/ultimate de 8 poses
          "knockdown8", "idle_long"] + [f"{c}_{a}8" for c in ("guerrero", "mago", "chain")
-                                       for a in ("counter", "special", "parry", "ultimate")]
+                                       for a in ("counter", "special", "parry", "ultimate")] + [
+         # técnicas de los bosses (GROKBOT_TECNICAS.md)
+         "tech_desfibrilador8", "tech_pushpop8", "tech_comercial8"]
 # Hojas con 8 poses en cuadrícula 4x2 (orden de lectura: fila de arriba 1-4, fila de abajo 5-8)
 GRID8 = ("walk8", "guerrero_attack8", "mago_cast8", "chain_whip8", "knockdown8", "idle_long") + tuple(
     f"{c}_{a}8" for c in ("guerrero", "mago", "chain") for a in ("counter", "special", "parry", "ultimate"))
+# técnicas de los bosses (GROKBOT_TECNICAS.md): 8 poses, arma a la espalda, comunes a las 3 clases
+TECH8 = ("tech_desfibrilador8", "tech_pushpop8", "tech_comercial8")
+GRID8 = GRID8 + TECH8
 # Hojas con poses agachadas/saltando: escalar con la altura de pie del personaje.
-STAND_REF = ("roll", "hurt", "guerrero_finisher", "mago_finisher", "chain_finisher",
+STAND_REF = TECH8 + ("roll", "hurt", "guerrero_finisher", "mago_finisher", "chain_finisher",
              "guerrero_special", "guerrero_parry", "guerrero_ultimate",
              "mago_special", "mago_parry", "mago_ultimate",
              "chain_special", "chain_parry", "chain_ultimate", "knockdown8") + tuple(
