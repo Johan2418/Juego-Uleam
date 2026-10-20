@@ -179,7 +179,7 @@ func _best(exclude: Node2D) -> Node2D:
 		var to := aim_point(n) - here
 		var s := to.length() * (1.25 - 0.35 * to.normalized().dot(fwd))
 		if n.has_signal("phase_changed"):
-			s *= 0.45   # el jefe tiene prioridad
+			s -= 100000.0   # el jefe siempre primero si está a la vista (el resto, con Tab / stick)
 		if s < best_s:
 			best_s = s
 			best = n

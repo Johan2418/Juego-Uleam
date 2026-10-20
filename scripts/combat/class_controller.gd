@@ -363,9 +363,7 @@ func _ult_beam() -> void:
 	_shake(7.0, 0.45)
 	for i in BEAM_TICKS:
 		for e in _enemies():
-			var v: Vector2 = _body_of(e) - origin
-			var along := v.dot(dir)
-			if along > -10.0 and along < BEAM_LEN and absf(v.dot(dir.orthogonal())) < BEAM_WIDTH * 0.5 + 10.0:
+			if _in_beam(e, origin, dir):
 				_hit_node(e, 2 if i == 0 else 1)
 		await player.get_tree().create_timer(BEAM_FIRE / BEAM_TICKS).timeout
 		if token != _action_token:
@@ -375,6 +373,19 @@ func _ult_beam() -> void:
 		return
 	_ult_fx = null
 	_finish("guerrero_ultimate")
+
+
+## ¿El haz toca al enemigo? Se mira todo su cuerpo (de los pies al centro de su zona golpeable),
+## no solo un punto: con el objetivo fijado el haz apunta al pecho y un boss alto quedaba fuera.
+func _in_beam(e: Node, origin: Vector2, dir: Vector2) -> bool:
+	var feet := (e as Node2D).global_position + Vector2(0.0, -10.0)
+	var top := aim_of(e)
+	for k in 7:
+		var v: Vector2 = feet.lerp(top, k / 6.0) - origin
+		var along := v.dot(dir)
+		if along > -10.0 and along < BEAM_LEN and absf(v.dot(dir.orthogonal())) < BEAM_WIDTH * 0.5 + 10.0:
+			return true
+	return false
 
 
 # Mago: rayos que caen en varios puntos (la mitad busca enemigos cercanos).

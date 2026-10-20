@@ -204,6 +204,10 @@ J ataque leve (combo) · K especial (cooldown) · L parry · Espacio ultimate (m
 
 ## 7. Bitácora
 
+### 2026-10-20 — Arreglo: ultimate del guerrero con objetivo fijado
+- Con el objetivo fijado, el haz del guerrero apunta al pecho del boss, pero el daño se calculaba con un punto a la altura de los pies: en diagonal o de lado el haz pasaba "por encima" sin dañar. Ahora `class_controller._in_beam()` revisa todo el cuerpo (de los pies al centro del Hurtbox). Prueba: `ztest/beam_test.gd` (3 bosses × 5 posiciones).
+- Fijar objetivo: al fijar, el jefe va SIEMPRE primero si está a la vista (antes, en STACK OVERFLOW, desde la izquierda se fijaba la torre). El resto de objetivos, con Tab / stick derecho.
+
 ### 2026-10-19 (4) — Técnicas de los bosses + nuevo menú del personaje
 - **Técnicas** (`scripts/combat/techniques.gd`): cada boss vencido da UNA técnica en una ranura fija, válida para las 3 clases (cada clase la hace con sus animaciones). Combo: Parásito (0xDEADBEEF, el remate cura 1) e Interés compuesto (#DIV/0!, +1/+2 de daño acumulando golpes; se pierde al recibir daño o 2 s sin pegar). Especial: Objeción (403, postura de bloqueo 1 s que responde con 3 de daño en cono), Tiza roja (SYNTAX, marca: ×2 de daño 5 s), Glitch (MISSING TEXTURE, teletransporte detrás del objetivo fijado + copia que explota). Ultimate: Desfibrilador (B.S.O.D., 3 de daño en área + cura 2), Push/Pop (STACK, 3 bloques de 2 + uno de 4), Corte comercial (KERNEL PANIC, 3 s sin recibir daño y luego 3 de daño a todo lo que esté en pantalla). Objeción y Corte comercial NO borran proyectiles a propósito: varios bosses esperan a que sus peligros terminen (p. ej. los sellos del juez).
 - Lógica en `class_controller.gd` (`tech`, `_tech_*`, marcas, interés; los orbes del mago pasan por `projectile_hit`). `player.gd`: `heal()`, `shield()`, y anima las técnicas con la hoja propia si existe (`<clase>_tech_<id>` o `tech_<id>`) o con la de la clase (`Techniques.FALLBACK_ANIM`).
