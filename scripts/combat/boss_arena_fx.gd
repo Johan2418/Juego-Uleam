@@ -19,7 +19,9 @@ const FLOOR_FRAC := {
 	"judge": [0.1, 0.3, 0.9, 0.9],
 	"tex": [0.06, 0.24, 0.945, 0.95],
 	"kp": [0.087, 0.26, 0.933, 0.96],
-	"sudo": [0.08, 0.24, 0.92, 0.94],
+	"sudo": [0.072, 0.306, 0.928, 0.914],
+	## La versión caos de SUDO tiene el escenario más abajo: su piso se mide aparte ("<boss>_caos").
+	"sudo_caos": [0.072, 0.445, 0.928, 0.913],
 }
 
 ## Ambiente de cada boss:
@@ -69,8 +71,10 @@ class Backdrop extends Node2D:
 				_mix = v
 				queue_redraw(), _mix, 1.0, 1.2)
 
-	func _dest(tex: Texture2D) -> Rect2:
+	func _dest(tex: Texture2D, caos: bool = false) -> Rect2:
 		var f: Array = FLOOR_FRAC.get(kind, FLOOR_FRAC["default"])
+		if caos and FLOOR_FRAC.has(kind + "_caos"):
+			f = FLOOR_FRAC[kind + "_caos"]
 		var sz := tex.get_size()
 		var fx0: float = f[0]
 		var fy0: float = f[1]
@@ -86,7 +90,7 @@ class Backdrop extends Node2D:
 		if _a:
 			draw_texture_rect(_a, _dest(_a), false)
 		if _b and _mix > 0.0:
-			draw_texture_rect(_b, _dest(_b), false, Color(1, 1, 1, _mix))
+			draw_texture_rect(_b, _dest(_b, true), false, Color(1, 1, 1, _mix))
 
 
 ## Partículas de ambiente (esporas, polvo, tiza, monedas, píxeles sin textura...).

@@ -1,6 +1,6 @@
 extends RefCounted
 ## Sprites de los bosses (recortados con tools/slice_boss_sheets.py).
-## Los "boss_bsod_*" viven en bosses/bsod/, los "boss_div0_*" en bosses/div0/, los "boss_syntax_*" en bosses/syntax/, los "boss_stack_*" en bosses/stack/, los "boss_judge_*" en bosses/judge/, los "boss_tex_*" en bosses/tex/, los "boss_kp_*" en bosses/kp/, el resto en bosses/deadbeef/.
+## Los "boss_bsod_*" viven en bosses/bsod/, los "boss_div0_*" en bosses/div0/, los "boss_syntax_*" en bosses/syntax/, los "boss_stack_*" en bosses/stack/, los "boss_judge_*" en bosses/judge/, los "boss_tex_*" en bosses/tex/, los "boss_kp_*" en bosses/kp/, los "boss_sudo_*" en bosses/sudo/, el resto en bosses/deadbeef/.
 ## Si falta un PNG, tex() devuelve null y cada pieza vuelve a su dibujo por código.
 ## Sin class_name: cargar con preload.
 
@@ -12,6 +12,7 @@ const DIR_STACK := "res://assets/sprites/bosses/stack/"
 const DIR_JUDGE := "res://assets/sprites/bosses/judge/"
 const DIR_TEX := "res://assets/sprites/bosses/tex/"
 const DIR_KP := "res://assets/sprites/bosses/kp/"
+const DIR_SUDO := "res://assets/sprites/bosses/sudo/"
 
 static var _cache: Dictionary = {}
 static var _pivots: Dictionary = {}
@@ -35,6 +36,8 @@ static func tex(name: String) -> Texture2D:
 		dir = DIR_TEX
 	elif name.begins_with("boss_kp"):
 		dir = DIR_KP
+	elif name.begins_with("boss_sudo"):
+		dir = DIR_SUDO
 	var path := dir + name + ".png"
 	var t: Texture2D = load(path) if ResourceLoader.exists(path) else null
 	_cache[name] = t

@@ -1,5 +1,6 @@
 extends RefCounted
-## Peligros y efectos del boss 9 SUDO, el Líder del Club IA (versión de prueba, dibujados por código).
+## Peligros y efectos del boss 9 SUDO, el Líder del Club IA.
+## Usan los sprites de assets/sprites/bosses/sudo/ (tools/slice_sudo_sheets.py) y, si faltan, el dibujo por código.
 ## Fase 1 Supabase + Cursor (rayos verdes, cursores), fase 2 Grokbot + Clerk (bots, login, 2FA),
 ## fase 3 Terra · Luna · Sol, y las piezas de la cinemática ASTRA (espiral de estrellas, QTE).
 ## Las marcas reales no se dibujan: solo sus colores y formas genéricas.
@@ -8,6 +9,7 @@ extends RefCounted
 const GameFeel := preload("res://scripts/combat/game_feel.gd")
 const BossFx := preload("res://scripts/combat/boss_fx.gd")
 const Final := preload("res://scripts/combat/boss_final.gd")
+const Spr := preload("res://scripts/combat/boss_sprites.gd")
 
 const GREEN := Color(0.24, 0.81, 0.56)
 const GREEN_HI := Color(0.7, 1.0, 0.85)
@@ -21,6 +23,28 @@ const EARTH := Color(0.3, 0.6, 1.0)
 
 ## Ayudas de dibujo comunes (en una clase interna: las clases internas no ven las funciones de afuera).
 class U extends RefCounted:
+	## Dibuja el sprite "boss_sudo_<name>" centrado en `at`. Devuelve false si no existe (y no dibuja nada).
+	static func spr(ci: CanvasItem, name: String, at: Vector2, scale: float = 1.0, rot: float = 0.0, col: Color = Color.WHITE, flip: bool = false) -> bool:
+		var tex: Texture2D = Spr.tex("boss_sudo_" + name)
+		if tex == null:
+			return false
+		var sz := tex.get_size()
+		ci.draw_set_transform(at, rot, Vector2(-scale if flip else scale, scale))
+		ci.draw_texture(tex, -sz * 0.5, col)
+		ci.draw_set_transform(Vector2.ZERO)
+		return true
+
+	## Igual, pero con la base (pies) en `at`.
+	static func spr_feet(ci: CanvasItem, name: String, at: Vector2, scale: float = 1.0, col: Color = Color.WHITE, flip: bool = false, sy: float = 1.0) -> bool:
+		var tex: Texture2D = Spr.tex("boss_sudo_" + name)
+		if tex == null:
+			return false
+		var sz := tex.get_size()
+		ci.draw_set_transform(at, 0.0, Vector2(-scale if flip else scale, scale * sy))
+		ci.draw_texture(tex, Vector2(-sz.x * 0.5, -sz.y), col)
+		ci.draw_set_transform(Vector2.ZERO)
+		return true
+
 	## Le pone una zona golpeable (capa 2) a un nodo: así los ataques del jugador lo encuentran.
 	static func add_hurtbox(n: Node2D, size: Vector2, at: Vector2) -> void:
 		var hurt := Area2D.new()
@@ -132,6 +156,8 @@ class Bolt extends SHazard:
 		else:
 			var a := clampf(1.0 - (t - warn) / 0.4, 0.0, 1.0)
 			U.zigzag(self, Vector2(randf_range(-6, 6), -520), Vector2.ZERO, Color(GREEN_HI, a), 5.0, _seed + int(t * 30.0))
+			if col == GREEN:
+				U.spr_feet(self, "projectiles_1", Vector2(0, 6), 1.0, Color(1, 1, 1, a))
 			ellipse(Vector2.ZERO, Vector2(r * 1.1, r * 0.55), Color(col, 0.5 * a))
 			ellipse(Vector2.ZERO, Vector2(r * 0.5, r * 0.25), Color(1, 1, 1, 0.8 * a))
 
@@ -193,6 +219,8 @@ class Realtime extends SHazard:
 			_cube(p, fade)
 
 	func _cube(c: Vector2, a: float) -> void:
+		if U.spr(self, "props_0", c + Vector2(0, -10), 1.0, 0.0, Color(1, 1, 1, a)):
+			return
 		var s := 16.0
 		var top := PackedVector2Array([c + Vector2(0, -s - 8), c + Vector2(s, -s * 0.5 - 8), c + Vector2(0, -8), c + Vector2(-s, -s * 0.5 - 8)])
 		var left := PackedVector2Array([c + Vector2(-s, -s * 0.5 - 8), c + Vector2(0, -8), c + Vector2(0, s * 0.6), c + Vector2(-s, s * 0.1)])
@@ -327,6 +355,8 @@ class EdgeBall extends SHazard:
 		var c := GREEN_HI if not back else Color(1, 1, 0.7)
 		for i in 4:
 			draw_circle(-vel.normalized() * (8.0 + i * 7.0), 8.0 - i * 1.6, Color(c, 0.25 - i * 0.05))
+		if U.spr(self, "projectiles_0", Vector2.ZERO, 1.0, t * 6.0, Color(1, 1, 0.75) if back else Color.WHITE):
+			return
 		draw_circle(Vector2.ZERO, 13.0, Color(GREEN, 0.5))
 		draw_circle(Vector2.ZERO, 9.0, c)
 		for i in 3:
@@ -369,7 +399,8 @@ class GhostTrail extends SHazard:
 			U.text(self, p + side * 4.0 - Vector2(18, -4), str(words[i % words.size()]), 11, Color(0.82, 0.82, 0.88, 0.55 * a), -1, HORIZONTAL_ALIGNMENT_LEFT, 0)
 		# cursor parpadeante al final
 		if fmod(t * 6.0, 1.0) > 0.4:
-			draw_rect(Rect2(end + Vector2(-3, -16), Vector2(6, 26)), Color(CURSOR, a))
+			if not U.spr(self, "projectiles_4", end + Vector2(0, -4), 1.0, 0.0, Color(1, 1, 1, a)):
+				draw_rect(Rect2(end + Vector2(-3, -16), Vector2(6, 26)), Color(CURSOR, a))
 		U.text(self, end + Vector2(10, -18), "Tab", 13, Color(1, 1, 1, 0.85 * a))
 
 
@@ -492,6 +523,10 @@ class CursorAgent extends Node2D:
 	func _draw() -> void:
 		var a := (1.0 - clampf(_dead / 0.25, 0.0, 1.0)) * (0.45 if fake else 1.0)
 		var s := 1.0 + (0.25 * sin(_click * 30.0) if _click >= 0.0 else 0.0)
+		if U.spr(self, "minions_7" if _click >= 0.0 else "minions_6", Vector2(4, sin(t * 6.0) * 2.0 - 12.0), s, 0.0, Color(1, 1, 1, a)):
+			if _click >= 0.0:
+				draw_arc(Vector2(0, -10), 30.0 - 20.0 * _click / 0.35, 0, TAU, 20, Color(CURSOR, a), 2.0)
+			return
 		draw_set_transform(Vector2(0, sin(t * 6.0) * 2.0 - 10.0), -0.2, Vector2(s, s))
 		var pts := PackedVector2Array([Vector2(0, -16), Vector2(0, 12), Vector2(6, 6), Vector2(11, 16), Vector2(15, 14), Vector2(10, 4), Vector2(18, 4)])
 		var outline := PackedVector2Array(pts)
@@ -558,6 +593,17 @@ class PShot extends SHazard:
 		queue_redraw()
 
 	func _draw() -> void:
+		var sp := {"pixel": "projectiles_2", "lock": "projectiles_5", "rock": "projectiles_3", "moon": "props_7"}
+		if sp.has(kind):
+			var rot := t * _spin
+			if kind == "moon":
+				rot = vel.angle() + t * 10.0
+				draw_circle(Vector2.ZERO, 16.0, Color(MOON, 0.12))
+			elif kind == "lock":
+				draw_circle(Vector2.ZERO, 18.0, Color(CLERK, 0.25))
+				rot = 0.0
+			if U.spr(self, str(sp[kind]), Vector2.ZERO, 1.0, rot):
+				return
 		match kind:
 			"pixel":
 				draw_set_transform(Vector2.ZERO, t * _spin)
@@ -609,6 +655,7 @@ class Grokbot extends Node2D:
 	var _dead := 0.0
 	var _paint := 0.0
 	var _walk := 0.0
+	var _moving := false
 
 	func _ready() -> void:
 		add_to_group("enemies")
@@ -629,6 +676,7 @@ class Grokbot extends Node2D:
 		if d.length() > 6.0:
 			global_position += d.normalized() * minf(d.length(), 180.0 * delta)
 			_walk += delta * 12.0
+			_moving = true
 		else:
 			_cd -= delta
 			_paint = maxf(0.0, _paint - delta)
@@ -671,6 +719,16 @@ class Grokbot extends Node2D:
 
 	func _draw() -> void:
 		var a := (1.0 - clampf(_dead / 0.3, 0.0, 1.0)) * (0.45 if fake else 1.0)
+		var fr := "minions_0"
+		if _dead > 0.0:
+			fr = "minions_5"
+		elif _paint > 0.0:
+			fr = "minions_4"
+		elif _moving:
+			fr = "minions_%d" % (int(_walk / 1.6) % 4)
+		_moving = false
+		if U.spr_feet(self, fr, Vector2.ZERO, 1.0, Color(1, 1, 1, a), spot.x < global_position.x):
+			return
 		var bob := absf(sin(_walk)) * 3.0
 		# piernas
 		draw_rect(Rect2(-11, -10 + bob * 0.3, 7, 10), Color(0.12, 0.12, 0.14, a))
@@ -881,6 +939,8 @@ class SessionRing extends SHazard:
 			_padlock(Vector2(0, -r * 0.5 - 30), 1.0 - e, true)
 
 	func _padlock(c: Vector2, a: float, closed: bool) -> void:
+		if U.spr(self, "props_1" if closed else "props_2", c, 1.0, 0.0, Color(1, 1, 1, a)):
+			return
 		draw_arc(c + Vector2(0 if closed else 6, -10), 10.0, PI, TAU, 12, Color(0.9, 0.9, 1, a), 4.0)
 		draw_rect(Rect2(c + Vector2(-14, -10), Vector2(28, 22)), Color(CLERK, a))
 		draw_rect(Rect2(c + Vector2(-14, -10), Vector2(28, 22)), Color(0, 0, 0, 0.8 * a), false, 2.0)
@@ -933,8 +993,12 @@ class Code extends Node2D:
 		var a := 1.0 - clampf(_dead / 0.25, 0.0, 1.0)
 		var bob := sin(t * 3.0 + (1.0 if correct else 0.0) * 2.0) * 4.0
 		var r := Rect2(-50, -24 + bob, 100, 34)
-		draw_rect(r, Color(0.98, 0.98, 1, a))
-		draw_rect(r, Color(CLERK, a), false, 3.0)
+		var card: Texture2D = Spr.tex("boss_sudo_props_6")
+		if card:
+			draw_texture_rect(card, r.grow(3.0), false, Color(1, 1, 1, a))
+		else:
+			draw_rect(r, Color(0.98, 0.98, 1, a))
+			draw_rect(r, Color(CLERK, a), false, 3.0)
 		U.text(self, Vector2(-50, -1 + bob), code, 20, Color(0.15, 0.1, 0.3, a), 100, HORIZONTAL_ALIGNMENT_CENTER, 0)
 		U.text(self, Vector2(-50, -30 + bob), "2FA", 11, Color(CLERK.lightened(0.4), a), 100, HORIZONTAL_ALIGNMENT_CENTER)
 		draw_rect(Rect2(-50, 12 + bob, 100 * clampf(1.0 - t / life, 0.0, 1.0), 3), Color(CLERK, a))
@@ -987,9 +1051,10 @@ class LockIcon extends Node2D:
 		var bob := sin(t * 5.0) * 2.0
 		draw_rect(Rect2(-62, -36 + bob, 124, 16), Color(0, 0, 0, 0.7))
 		U.text(self, Vector2(-62, -24 + bob), "401 UNAUTHORIZED", 11, Color(1, 0.5, 0.5), 124, HORIZONTAL_ALIGNMENT_CENTER, 0)
-		draw_arc(Vector2(0, -6 + bob), 7.0, PI, TAU, 10, Color(0.9, 0.9, 1), 3.0)
-		draw_rect(Rect2(-10, -6 + bob, 20, 15), CLERK)
-		U.text(self, Vector2(-10, 6 + bob), label, 11, Color.WHITE, 20, HORIZONTAL_ALIGNMENT_CENTER, 0)
+		if not U.spr(self, "props_1", Vector2(0, 0 + bob), 0.8):
+			draw_arc(Vector2(0, -6 + bob), 7.0, PI, TAU, 10, Color(0.9, 0.9, 1), 3.0)
+			draw_rect(Rect2(-10, -6 + bob, 20, 15), CLERK)
+		U.text(self, Vector2(-10, 8 + bob), label, 11, Color.WHITE, 20, HORIZONTAL_ALIGNMENT_CENTER, 0)
 
 
 ## Llave que suelta SUDO al revocar: tocarla o golpearla devuelve la habilidad antes de tiempo.
@@ -1031,6 +1096,8 @@ class Key extends Node2D:
 	func _draw() -> void:
 		var bob := sin(t * 4.0) * 4.0 - 18.0
 		draw_circle(Vector2(0, bob), 20.0, Color(1, 0.85, 0.3, 0.15 + 0.1 * sin(t * 8.0)))
+		if U.spr(self, "props_3", Vector2(0, bob), 1.0, sin(t * 3.0) * 0.2):
+			return
 		draw_arc(Vector2(-6, bob), 6.0, 0, TAU, 12, Color(1, 0.85, 0.3), 3.0)
 		draw_line(Vector2(0, bob), Vector2(14, bob), Color(1, 0.85, 0.3), 3.0)
 		draw_line(Vector2(10, bob), Vector2(10, bob + 5), Color(1, 0.85, 0.3), 3.0)
@@ -1080,6 +1147,19 @@ class Planet extends Node2D:
 	func _draw() -> void:
 		var dim := off_left > 0.0
 		var a := 0.45 if dim else 1.0
+		var idx: int = {"terra": 0, "luna": 1, "sol": 2}[kind] + (3 if dim else 0)
+		var sc := 1.0 + 0.35 * glow
+		var rot := t * 0.5 if kind == "sol" else 0.0
+		if kind == "sol" and not dim:
+			draw_circle(Vector2.ZERO, 30.0 * sc, Color(SUN, 0.18))
+		elif kind == "terra":
+			draw_circle(Vector2.ZERO, 24.0 * sc, Color(EARTH, 0.15 * a))
+		if U.spr(self, "planets_%d" % idx, Vector2.ZERO, sc, rot):
+			if dim:
+				U.text(self, Vector2(-30, -size - 10), "OFFLINE", 9, Color(1, 0.5, 0.5), 60, HORIZONTAL_ALIGNMENT_CENTER, 0)
+			var nm: String = {"terra": "TERRA", "luna": "LUNA", "sol": "SOL"}[kind]
+			U.text(self, Vector2(-30, size + 16), nm, 9, Color(1, 1, 1, 0.55 * a), 60, HORIZONTAL_ALIGNMENT_CENTER, 0)
+			return
 		match kind:
 			"sol":
 				var s := size * (1.0 + 0.4 * glow)
@@ -1174,6 +1254,8 @@ class RockPillar extends Node2D:
 		var h := 54.0 * up
 		if h < 3.0:
 			return
+		if U.spr_feet(self, "props_4", Vector2.ZERO, 1.0, Color.WHITE, false, up):
+			return
 		draw_colored_polygon(PackedVector2Array([Vector2(-20, 0), Vector2(-15, -h), Vector2(-4, -h - 8), Vector2(12, -h + 2), Vector2(20, 0)]), Color(0.48, 0.37, 0.27))
 		draw_colored_polygon(PackedVector2Array([Vector2(-15, -h), Vector2(-4, -h - 8), Vector2(12, -h + 2), Vector2(0, -h + 6)]), Color(0.62, 0.5, 0.38))
 		draw_polyline(PackedVector2Array([Vector2(-20, 0), Vector2(-15, -h), Vector2(-4, -h - 8), Vector2(12, -h + 2), Vector2(20, 0)]), Color(0.15, 0.1, 0.05), 2.0)
@@ -1220,6 +1302,9 @@ class OrbitRock extends SHazard:
 
 	func _draw() -> void:
 		draw_circle(Vector2.ZERO, 30.0, Color(EARTH, 0.18))
+		ellipse(Vector2(0, 34), Vector2(22, 7), Color(0, 0, 0, 0.3))
+		if U.spr(self, "planets_0", Vector2.ZERO, 1.25, t * 2.0):
+			return
 		draw_circle(Vector2.ZERO, 22.0, Color(0.2, 0.45, 0.9))
 		draw_colored_polygon(PackedVector2Array([Vector2(-12, -9), Vector2(-2, -15), Vector2(4, -7), Vector2(-3, 3), Vector2(-11, 0)]), Color(0.3, 0.75, 0.35))
 		draw_colored_polygon(PackedVector2Array([Vector2(5, 3), Vector2(15, 0), Vector2(12, 12), Vector2(4, 11)]), Color(0.3, 0.75, 0.35))
@@ -1363,6 +1448,8 @@ class LaneDash extends SHazard:
 		else:
 			var tail := x - dir * 260.0
 			draw_line(Vector2(tail, y), Vector2(x, y), Color(0.8, 0.8, 0.9, 0.3), 30.0)
+			if U.spr(self, "projectiles_4", Vector2(x, y - 3), 1.0, 0.0, Color.WHITE, dir < 0):
+				return
 			draw_rect(Rect2(x - 5, y - 20, 10, 34), CURSOR)
 			draw_rect(Rect2(x - 5, y - 20, 10, 34), Color(1, 1, 1, 0.8), false, 2.0)
 
@@ -1474,6 +1561,14 @@ class AstraBall extends Node2D:
 	func _draw() -> void:
 		for i in 5:
 			draw_circle(Vector2.ZERO, r * (1.0 + 0.35 * i) + sin(t * 8.0 + i) * 3.0, Color(tint, 0.12))
+		var tex: Texture2D = Spr.tex("boss_sudo_projectiles_6")
+		if tex:
+			var k := r * 2.1 / tex.get_size().x
+			U.spr(self, "projectiles_6", Vector2.ZERO, k, t * 2.5)
+			for i in 10:
+				var a2 := t * 2.0 + TAU * i / 10.0
+				draw_circle(Vector2.from_angle(a2) * r * 1.6, 2.0, Color(1, 1, 1, 0.8))
+			return
 		draw_circle(Vector2.ZERO, r, Color(tint.lightened(0.3), 0.95))
 		draw_circle(Vector2.ZERO, r * 0.6, Color(1, 1, 1))
 		for i in 3:
@@ -1719,6 +1814,8 @@ class Clicker extends Node2D:
 		queue_redraw()
 
 	func _draw() -> void:
+		if U.spr(self, "props_5", Vector2.ZERO, 0.8):
+			return
 		draw_rect(Rect2(-9, -4, 18, 8), Color(0.1, 0.1, 0.12))
 		draw_rect(Rect2(-9, -4, 18, 8), Color(0.5, 0.5, 0.55), false, 1.0)
 		draw_circle(Vector2(-4, 0), 1.6, Color(1, 0.2, 0.2) if fmod(t * 3.0, 1.0) > 0.5 else Color(0.3, 0.05, 0.05))

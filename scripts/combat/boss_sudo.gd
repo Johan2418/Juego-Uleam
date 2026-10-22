@@ -9,7 +9,10 @@ extends CharacterBody2D
 ##   Fase 3 Terra, Luna y Sol orbitándolo; cada astro que ataca suma tokens. Golpear un astro lo apaga 6 s.
 ## Duelo final ASTRA: cinemática con QTE (rodar, parry, machacar ataque). Fallar = muerte instantánea del jugador.
 ## Remate: su propio Astra le vuelve encima y se desvanece en polvo de estrellas.
-## Versión de prueba con figuras de código; cuando lleguen las hojas de grokbot (bosses/sudo/) se cambian por sprites.
+## Sprites: hojas de 8 poses de grokbot recortadas con tools/slice_sudo_sheets.py en assets/sprites/bosses/sudo/.
+## El cuerpo cambia de POSE (no se arma por piezas): pose_name() la elige según lo que esté haciendo
+## (pistas con _hint(), brazos invisibles que siguen girando como antes, estado y ánimo).
+## Si faltan los PNG, todo vuelve al dibujo por código.
 ## Sin class_name: cargar con preload.
 
 const GameFeel := preload("res://scripts/combat/game_feel.gd")
@@ -18,6 +21,7 @@ const BossFx := preload("res://scripts/combat/boss_fx.gd")
 const Fx := preload("res://scripts/combat/boss_sudo_fx.gd")
 const Final := preload("res://scripts/combat/boss_final.gd")
 const Roar := preload("res://scripts/combat/boss_roar.gd")
+const Spr := preload("res://scripts/combat/boss_sprites.gd")
 
 signal hp_changed(hp: int, max_hp: int)
 signal phase_changed(phase: int, title: String)
@@ -119,6 +123,16 @@ var _orbit_a := 0.0
 # cinemática ASTRA
 var _cinema: Array = []
 var _cam_tw: Tween
+# poses (sprites)
+var sprites := false
+var _hint_pose := ""
+var _hint_left := 0.0
+var _pose_cur := ""
+var _pose_since := 0.0
+var _death_pose := ""
+var dash_flip := false
+## Fuerza una imagen concreta (la usa el generador de la estatua).
+var pose_force := ""
 
 var rig: Node2D
 var body: Body
@@ -169,7 +183,94 @@ func ctx_max() -> float:
 	return CTX_MAX[phase - 1]
 
 
+## Poses: [imágenes, cuadros por segundo, true = en bucle / false = se queda en la última]
+const ANIMS := {
+	"idle": [["idle_0", "idle_1", "idle_2", "idle_3"], 3.5, true],
+	"walk": [["walk_0", "walk_1", "walk_2", "walk_3"], 8.0, true],
+	"raise": [["raise_0", "raise_1"], 9.0, false],
+	"point": [["point_0", "point_1"], 3.0, true],
+	"spread": [["spread_0", "spread_1"], 3.0, true],
+	"summon": [["summon_0", "summon_1"], 3.0, true],
+	"crouch": [["crouch_0"], 1.0, false],
+	"dash": [["dash_0"], 1.0, false],
+	"stomp": [["stomp_0"], 1.0, false],
+	"wave": [["wave_0", "stand_0"], 4.0, true],
+	"present": [["present_0"], 1.0, false],
+	"think": [["think_0"], 1.0, false],
+	"laugh": [["laugh_0", "stand_0"], 5.0, true],
+	"stand": [["stand_0"], 1.0, false],
+	"flinch": [["flinch_0", "flinch_1"], 7.0, false],
+	"dizzy": [["dizzy_0", "dizzy_1"], 3.0, true],
+	"kneel": [["kneel_0", "kneel_1"], 2.0, false],
+	"fade": [["fade_0", "fade_1"], 1.4, false],
+}
+## Dónde queda la mano del clicker en cada pose (pies en 0); sirve para que salgan de ahí los rayos y el clicker.
+const HAND := {
+	"idle": Vector2(-38, -140), "walk": Vector2(-34, -132), "raise": Vector2(-30, -232), "point": Vector2(-14, -150),
+	"spread": Vector2(-70, -136), "summon": Vector2(-40, -228), "flinch": Vector2(-52, -116), "dizzy": Vector2(-40, -92),
+}
+
+
+static func has_sprites() -> bool:
+	return Spr.tex("boss_sudo_idle_0") != null
+
+
+## Pista de pose por unos segundos (tiene prioridad sobre lo que dicen los brazos).
+func _hint(pose: String, time: float) -> void:
+	_hint_pose = pose
+	_hint_left = time
+
+
+## Qué pose toca ahora.
+func pose_name() -> String:
+	if state == "dead":
+		return _death_pose if _death_pose != "" else "fade"
+	if _hint_left > 0.0 and _hint_pose != "":
+		return _hint_pose
+	if body and body.mood == 3:
+		return "dizzy"
+	if state == "stunned":
+		return "flinch"
+	if _dashing:
+		return "dash"
+	var l := arm_l.rotation
+	var r := -arm_r.rotation
+	var up_l := l > 1.9
+	var up_r := r > 1.9
+	if up_l and up_r:
+		return "summon"
+	if up_l or up_r:
+		return "raise"
+	if l > 0.9 and r > 0.9:
+		return "spread"
+	if l > 0.9 or r > 0.9:
+		return "point"
+	if body and body.walk_speed > 0.1:
+		return "walk"
+	return "idle"
+
+
+## Nombre de la imagen de la pose actual (sin el prefijo boss_sudo_).
+func pose_frame() -> String:
+	if pose_force != "":
+		return pose_force
+	var p := pose_name()
+	if p != _pose_cur:
+		_pose_cur = p
+		_pose_since = _t
+	var a: Array = ANIMS.get(p, ANIMS["idle"])
+	var frames: Array = a[0]
+	var i := int((_t - _pose_since) * float(a[1]))
+	i = i % frames.size() if bool(a[2]) else mini(i, frames.size() - 1)
+	return str(frames[i])
+
+
+func pose_flipped() -> bool:
+	return _pose_cur == "dash" and dash_flip
+
+
 func _build_rig() -> void:
+	sprites = has_sprites()
 	rig = Node2D.new()
 	rig.name = "Rig"
 	add_child(rig)
@@ -190,6 +291,11 @@ func _build_rig() -> void:
 	arm_r.position = SHOULDER_R
 	arm_r.rotation = REST_R
 	rig.add_child(arm_r)
+	if sprites:
+		# con sprites los brazos ya vienen en cada pose: siguen girando (invisibles) para elegir la pose
+		arm_l.sprite_mode = true
+		arm_r.sprite_mode = true
+		body.use_parent_material = true
 	_bubble = Bubble.new()
 	_bubble.position = Vector2(46, -236)
 	rig.add_child(_bubble)
@@ -210,6 +316,7 @@ func _slide() -> void:
 
 func _physics_process(delta: float) -> void:
 	_t += delta
+	_hint_left = maxf(0.0, _hint_left - delta)
 	if state != "dead":
 		var bob := sin(_t * 2.0) * 1.5
 		rig.position = rig_off + Vector2(0, bob)
@@ -420,6 +527,7 @@ func _rest_arms() -> void:
 
 func _point(arm: Arm, at: Vector2, time: float = 0.2) -> void:
 	_tw(arm, "rotation", _rot_for((at - arm.global_position).normalized()), time)
+	_hint("point", time + 0.4)
 
 
 ## Pulsa el clicker: destello en la mano y la pantalla parpadea.
@@ -429,6 +537,9 @@ func _click() -> void:
 
 
 func _hand_pos(arm: Arm) -> Vector2:
+	if sprites and arm == arm_r:
+		var p := pose_name()
+		return global_position + rig_off + HAND.get(p, HAND["idle"])
 	return arm.to_global(Vector2(0, ARM_LEN))
 
 
@@ -514,6 +625,7 @@ func _overflow() -> void:
 	screen.mode = "compact"
 	body.mood = 1
 	_say("Compactando contexto...", Color(0.5, 0.6, 0.75), 0.9)
+	_hint("think", 0.75)
 	_tw(self, "context", 0.0, 0.6)
 	_rest_pose(0.3)
 	_rest_arms()
@@ -640,6 +752,8 @@ func _atk_tab(tok: int) -> void:
 		_pose(Vector2(-8 * signf(target.x - from.x), 4), -0.12 * signf(target.x - from.x), 0.2)
 		_tw(arm_r, "rotation", _rot_for((target - from).normalized()), 0.2)
 		_tw(arm_l, "rotation", PI * 0.3, 0.2)
+		_hint("crouch", [0.6, 0.5, 0.42][phase - 1])
+		dash_flip = target.x < from.x
 		if not await _wait([0.6, 0.5, 0.42][phase - 1], tok):
 			return
 		# embestida
@@ -657,6 +771,7 @@ func _atk_tab(tok: int) -> void:
 		_dashing = false
 		_clamp_inside()
 		_impact(global_position, 2.0)
+		_hint("stomp", 0.2)
 		if not await _wait(0.22, tok):
 			return
 	_end_attack(tok)
@@ -713,6 +828,7 @@ func _atk_pulse(tok: int) -> void:
 	_pose(Vector2(0, 8), 0.0, 0.06)
 	_tw(arm_l, "rotation", 0.4, 0.06)
 	_tw(arm_r, "rotation", -0.4, 0.06)
+	_hint("stomp", 0.45)
 	var ring := BossFx.ShockRing.new()
 	ring.max_r = 240.0
 	_add_fx(ring, global_position)
@@ -1091,6 +1207,7 @@ func _atk_quake(tok: int) -> void:
 		return
 	_pose(Vector2(0, 8), 0.0, 0.06)
 	_tw(arm_l, "rotation", PI * 0.2, 0.06)
+	_hint("stomp", 0.45)
 	_impact(global_position, 5.0)
 	var origin := global_position + Vector2(_planet(  "terra").position.x if _planet("terra") else 0.0, 0)
 	var n := 3 if not enraged else 5
@@ -1548,6 +1665,7 @@ func _start_final() -> void:
 	Engine.time_scale = 1.0
 	_set_player_locked(true)
 	_say("¡¿Lo esquivaste?!", Color(0.9, 0.85, 0.4), 1.0)
+	_hint("think", 0.65)
 	# la espiral da la vuelta y regresa
 	var loop := create_tween()
 	var side := Vector2(260.0 if player.global_position.x <= 0.0 else -260.0, 60.0)
@@ -1590,6 +1708,8 @@ func _start_final() -> void:
 	q3.pressed.connect(_qte_push)
 	while is_instance_valid(q3) and q3.result == 0 and tok == _tok:
 		clash.k = q3.meter
+		clash.b = _hand_pos(arm_r)
+		_hint("point", 0.2)
 		_shake(1.5, 0.05)
 		await get_tree().process_frame
 	if tok != _tok:
@@ -1714,6 +1834,7 @@ func _astra_win(tok: int, ball: Node2D) -> void:
 ## Fallaste: la espiral te atraviesa. Muerte instantánea.
 func _astra_fail(tok: int, ball: Node2D) -> void:
 	_say("Sesión cerrada.", Color(0.6, 0.5, 1.0), 1.4)
+	_hint("laugh", 3.0)
 	if _player_ok() and is_instance_valid(ball):
 		var rush := create_tween()
 		rush.tween_property(ball, "global_position", _player_body(), 0.15)
@@ -1754,6 +1875,7 @@ func _astra_fail(tok: int, ball: Node2D) -> void:
 ## REMATE: se ilumina, se agrieta en luz y se deshace en polvo de estrellas. Se le cae el clicker.
 func _finisher() -> void:
 	state = "dead"
+	_death_pose = "flinch"
 	body.mood = 2
 	_pose(Vector2(0, 10), 0.05, 0.3)
 	_tw(arm_l, "rotation", 0.6, 0.4)
@@ -1767,6 +1889,7 @@ func _finisher() -> void:
 	clk.ground = global_position.y + 4.0
 	arm_r.holding = false
 	await get_tree().create_timer(0.9).timeout
+	_death_pose = "fade"
 	var dust := Fx.StarDust.new()
 	dust.area = Rect2(-45, -210, 90, 210)
 	add_child(dust)
@@ -1829,6 +1952,7 @@ func start_intro(skip: bool) -> void:
 	body.walk_speed = 0.0
 	# 3. saluda
 	_say("¡Hola a todos!", Color(0.2, 0.75, 0.5), 1.2)
+	_hint("wave", 1.0)
 	for i in 3:
 		_tw(arm_l, "rotation", PI * 0.8, 0.15)
 		await get_tree().create_timer(0.16).timeout
@@ -1842,6 +1966,7 @@ func start_intro(skip: bool) -> void:
 	s.col = Color(0.3, 0.9, 0.55)
 	Roar.spawn(get_parent(), s, global_position + Vector2(170, -200))
 	_tw(arm_l, "rotation", REST_L, 0.3)
+	_hint("present", 1.3)
 	await get_tree().create_timer(1.3).timeout
 	# 5. firma: levanta el clicker y un rayo verde le cae en la mano
 	body.mood = 1
@@ -1866,6 +1991,7 @@ func start_intro(skip: bool) -> void:
 	GameFeel.hit_stop(get_tree(), 0.1)
 	arm_r.charge = 1.0
 	_say("¡EMPECEMOS LA DEMO!", Color(0.15, 0.75, 0.45), 1.3)
+	_hint("laugh", 0.6)
 	await get_tree().create_timer(1.3).timeout
 	_rest_pose()
 	_rest_arms()
@@ -1908,6 +2034,7 @@ func _die() -> void:
 			p.visible = false
 	if rig.modulate.a > 0.1:
 		# muerte sin duelo (no debería pasar): se desvanece igual
+		_death_pose = "fade"
 		var dust := Fx.StarDust.new()
 		add_child(dust)
 		create_tween().tween_property(rig, "modulate:a", 0.0, 1.2)
@@ -1956,6 +2083,15 @@ class Body extends Node2D:
 		draw_polyline(o, line, w)
 
 	func _draw() -> void:
+		if boss and bool(boss.get("sprites")):
+			var tex: Texture2D = Spr.tex("boss_sudo_" + str(boss.call("pose_frame")))
+			if tex:
+				var sz := tex.get_size()
+				var flip: bool = bool(boss.call("pose_flipped"))
+				draw_set_transform(recoil * 0.5, 0.0, Vector2(-1.0 if flip else 1.0, 1.0))
+				draw_texture(tex, Vector2(-sz.x * 0.5, -sz.y))
+				draw_set_transform(Vector2.ZERO)
+				return
 		var sw := sin(_walk) * (5.0 if walk_speed > 0.05 else 0.0)
 		_legs(sw)
 		_torso()
@@ -2063,6 +2199,8 @@ class Arm extends Node2D:
 	var click := 0.0
 	var charge := 0.0
 	var holding := true
+	## Con sprites el brazo no se dibuja (viene en la pose), pero sigue girando para elegir la pose.
+	var sprite_mode := false
 	var _base := 0.0
 
 	func _process(delta: float) -> void:
@@ -2071,6 +2209,8 @@ class Arm extends Node2D:
 		queue_redraw()
 
 	func _draw() -> void:
+		if sprite_mode:
+			return
 		draw_set_transform(Vector2.ZERO, anim)
 		var ink := Color(0.03, 0.03, 0.04)
 		# manga negra
@@ -2131,9 +2271,26 @@ class Screen extends Node2D:
 		var inner := Rect2(-82, -46, 164, 86)
 		# haz del proyector y soporte
 		draw_colored_polygon(PackedVector2Array([Vector2(-60, 52), Vector2(60, 52), Vector2(20, 120), Vector2(-20, 120)]), Color(0.8, 0.9, 1.0, 0.05))
-		draw_rect(Rect2(outer.position + Vector2(4, 4), outer.size), Color(0, 0, 0, 0.35))
-		draw_rect(outer, Color(0.16, 0.17, 0.19))
-		draw_rect(outer, Color(0.03, 0.03, 0.04), false, 2.0)
+		# marco con sprite (boss_sudo_screen_0 normal, _1 agrietada en el modo ultra, _2 apagada al final)
+		var idx := 0
+		if boss and str(boss.get("state")) == "dead":
+			idx = 2
+		elif boss and bool(boss.get("enraged")):
+			idx = 1
+		var frame_tex: Texture2D = Spr.tex("boss_sudo_screen_%d" % idx)
+		if frame_tex:
+			var fs := frame_tex.get_size()
+			draw_rect(Rect2(Vector2(-fs.x * 0.5 + 4, -fs.y * 0.5 + 4), fs), Color(0, 0, 0, 0.3))
+			draw_texture(frame_tex, -fs * 0.5)
+			# hueco de la pantalla dentro de la imagen (medido al recortar: 7,18 - 161,102 de 176x115)
+			inner = Rect2(Vector2(-fs.x * 0.5, -fs.y * 0.5) + Vector2(7, 18) * fs.x / 176.0, Vector2(154, 84) * fs.x / 176.0)
+			if idx == 2:
+				draw_set_transform(Vector2.ZERO)
+				return
+		else:
+			draw_rect(Rect2(outer.position + Vector2(4, 4), outer.size), Color(0, 0, 0, 0.35))
+			draw_rect(outer, Color(0.16, 0.17, 0.19))
+			draw_rect(outer, Color(0.03, 0.03, 0.04), false, 2.0)
 		var bg := Color(0.04, 0.12, 0.08)
 		var fg := Color(0.4, 1.0, 0.65)
 		var phase_n := int(boss.get("phase")) if boss else 1
@@ -2188,6 +2345,13 @@ class Screen extends Node2D:
 				draw_string(f, inner.position + Vector2(inner.size.x - 30, inner.size.y - 4), "%d/3" % slide_n, HORIZONTAL_ALIGNMENT_LEFT, -1, 9, Color(1, 1, 1, 0.5))
 				if fake:
 					draw_string(f, inner.position + Vector2(4, inner.size.y - 4), "alucinando...", HORIZONTAL_ALIGNMENT_LEFT, -1, 9, Color(1, 0.6, 0.6, 0.6 + 0.4 * sin(t * 10.0)))
+		if idx == 1 and frame_tex:
+			# grietas encima del contenido (modo ultra)
+			var c := inner.position + inner.size * Vector2(0.72, 0.45)
+			for a in [0.3, 1.4, 2.3, 3.5, 4.4, 5.4]:
+				var d := Vector2.from_angle(a)
+				draw_polyline(PackedVector2Array([c, c + d * 14.0 + d.orthogonal() * 3.0, c + d * 30.0]), Color(0.85, 0.9, 0.85, 0.75), 1.0)
+			draw_circle(c, 2.5, Color(0, 0, 0, 0.9))
 		if flick > 0.0:
 			draw_rect(inner, Color(1, 1, 1, flick * 1.5))
 		if fake:

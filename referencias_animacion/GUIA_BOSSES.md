@@ -96,4 +96,4 @@ Cada boss pertenece a una facultad de la ULEAM y tiene un ataque por cada carrer
 - **Técnica:** Autocompletar (combo).
 
 ## Estado
-Los 8 de facultad tienen sprites y música por fase; SUDO (9) es jugable con figuras de código y música propia, esperando sus hojas de grokbot. Todavía faltan los efectos de sonido y tu prueba en el editor.
+Los 8 de facultad tienen sprites y música por fase; SUDO (9) también tiene sprites (por poses), arena pintada y música propia. Todavía faltan los efectos de sonido y tu prueba en el editor.
