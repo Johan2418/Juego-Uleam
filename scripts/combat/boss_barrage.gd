@@ -18,7 +18,7 @@ const DURATION := {2: 7.5, 3: 9.5}
 const COLORS := {
 	"deadbeef": Color(1.0, 0.3, 0.2), "bsod": Color(0.35, 0.6, 1.0), "div0": Color(1.0, 0.8, 0.25),
 	"syntax": Color(0.45, 0.95, 0.5), "stack": Color(1.0, 0.6, 0.2), "judge": Color(1.0, 0.3, 0.3),
-	"tex": Color(1.0, 0.25, 0.9), "kp": Color(1.0, 0.65, 0.15),
+	"tex": Color(1.0, 0.25, 0.9), "kp": Color(1.0, 0.65, 0.15), "sudo": Color(0.3, 0.9, 0.6),
 }
 
 ## Programa de cada fase: [segundo, ataque, parámetros]

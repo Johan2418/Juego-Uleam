@@ -163,10 +163,10 @@ class HallDoor extends Area2D:
 		draw_polyline(frame.slice(1, frame.size() - 1), Color(0.6, 0.5, 0.28), 3.0)
 		draw_polygon(PackedVector2Array([Vector2(-14, -100), Vector2(14, -100), Vector2(40, 14), Vector2(-40, 14)]),
 			PackedColorArray([Color(0.85, 0.9, 1.0, 0.0), Color(0.85, 0.9, 1.0, 0.0), Color(0.85, 0.9, 1.0, 0.35 * glow), Color(0.85, 0.9, 1.0, 0.35 * glow)]))
-		# ocho rombos: los bosses vencidos brillan en dorado
-		var order: Array = ["deadbeef", "bsod", "div0", "syntax", "stack", "judge", "tex", "kp"]
+		# nueve rombos (8 facultades + Club IA): los bosses vencidos brillan en dorado
+		var order: Array = ["deadbeef", "bsod", "div0", "syntax", "stack", "judge", "tex", "kp", "sudo"]
 		for i in order.size():
-			var p := Vector2(-56 + i * 16, -118)
+			var p := Vector2(-64 + i * 16, -118)
 			var won := GameState.is_defeated(order[i])
 			var c := Color(1.0, 0.82, 0.35) if won else Color(0.3, 0.3, 0.34)
 			draw_colored_polygon(PackedVector2Array([p + Vector2(0, -5), p + Vector2(5, 0), p + Vector2(0, 5), p + Vector2(-5, 0)]), c)

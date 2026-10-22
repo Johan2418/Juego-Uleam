@@ -26,6 +26,11 @@ const DATA := {
 		"what": "Cada golpe del combo que conecta suma 1 moneda de interés (máx. 4). Con 2 monedas tus golpes hacen +1 de daño y con 4, +2. Si te golpean o pasas 2 s sin pegar, lo pierdes todo.",
 		"tip": "Premia atacar seguido sin recibir daño: ideal si ya dominas el parry.",
 	},
+	"autocompletar": {
+		"slot": "combo", "boss": "sudo", "name": "Autocompletar", "color": Color(0.45, 1.0, 0.7),
+		"what": "Cuando el remate del combo conecta, un golpe fantasma (texto gris de autocompletado) lo repite 0,4 s después con el mismo daño.",
+		"tip": "Más daño por combo sin quedarte más tiempo pegado al enemigo.",
+	},
 	"objecion": {
 		"slot": "special", "boss": "judge", "name": "Objeción", "color": Color(1.0, 0.4, 0.35), "cooldown": 3.5,
 		"what": "Postura de bloqueo de 1 s que cubre todo tu frente. Si bloquea un golpe, responde con una onda que hace 3 de daño delante de ti.",
@@ -176,6 +181,44 @@ class Drain extends Node2D:
 			var s := clampf(k * 1.4 - i * 0.08, 0.0, 1.0)
 			var p := from.lerp(to, s) + Vector2(0, -sin(s * PI) * 30.0) + Vector2(sin(t * 20.0 + i) * 4.0, 0)
 			draw_circle(p, 5.0 - i * 0.5, Color(0.4, 1.0, 0.45, 0.9 - i * 0.12))
+
+
+## Autocompletar: golpe fantasma gris que repite el remate sobre el enemigo 0,4 s después.
+class Echo extends Node2D:
+	var target: Node2D
+	var at := Vector2.ZERO
+	var damage := 2
+	var from := Vector2.ZERO
+	var t := 0.0
+	var _hit := false
+
+	func _ready() -> void:
+		z_index = 30
+		top_level = true
+		global_position = at
+
+	func _process(delta: float) -> void:
+		t += delta
+		if t >= 0.4 and not _hit:
+			_hit = true
+			if is_instance_valid(target) and target.is_in_group("enemies") and target.has_method("take_hit"):
+				target.call("take_hit", damage, from)
+				GameFeel.parry_burst(get_parent(), global_position, 16.0)
+		if t > 0.75:
+			queue_free()
+		queue_redraw()
+
+	func _draw() -> void:
+		var f := ThemeDB.fallback_font
+		var a := clampf(1.0 - maxf(0.0, t - 0.4) / 0.35, 0.0, 1.0)
+		if t < 0.4:
+			# texto fantasma que "predice" el golpe
+			var k := t / 0.4
+			draw_string(f, Vector2(-34, -30), "Tab", HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color(0.8, 0.8, 0.88, 0.5 + 0.4 * k))
+			draw_arc(Vector2.ZERO, 30.0, -2.4, -2.4 + 3.2 * k, 16, Color(0.8, 0.8, 0.9, 0.55), 5.0)
+		else:
+			draw_arc(Vector2.ZERO, 34.0, -2.4, 0.8, 16, Color(0.6, 1.0, 0.8, a), 6.0)
+			draw_arc(Vector2.ZERO, 34.0, -2.4, 0.8, 16, Color(1, 1, 1, a), 2.0)
 
 
 ## Contador de monedas de interés sobre la cabeza del jugador.

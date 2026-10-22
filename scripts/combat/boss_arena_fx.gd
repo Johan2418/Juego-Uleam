@@ -19,6 +19,7 @@ const FLOOR_FRAC := {
 	"judge": [0.1, 0.3, 0.9, 0.9],
 	"tex": [0.06, 0.24, 0.945, 0.95],
 	"kp": [0.087, 0.26, 0.933, 0.96],
+	"sudo": [0.08, 0.24, 0.92, 0.94],
 }
 
 ## Ambiente de cada boss:
@@ -33,6 +34,7 @@ const AMBIENT := {
 	"judge": {"mote": Color(1.0, 0.9, 0.65, 0.4), "move": "drift", "count": [14, 22, 32], "tint": [Color(1.0, 0.95, 0.92), Color(1.0, 0.8, 0.8)], "vig": Color(0.75, 0.05, 0.05)},
 	"tex": {"mote": Color(1.0, 0.0, 0.9, 0.85), "move": "glitch", "count": [6, 16, 34], "tint": [Color(0.98, 0.95, 1.0), Color(0.95, 0.85, 1.0)], "vig": Color(0.8, 0.0, 0.75)},
 	"kp": {"mote": Color(1.0, 0.75, 0.3, 0.8), "move": "up", "count": [8, 20, 40], "tint": [Color(1.0, 0.96, 0.9), Color(1.0, 0.85, 0.8)], "vig": Color(0.95, 0.2, 0.1)},
+	"sudo": {"mote": Color(0.55, 1.0, 0.75, 0.6), "move": "drift", "count": [10, 20, 40], "tint": [Color(0.96, 0.94, 1.0), Color(0.85, 0.85, 1.0)], "vig": Color(0.35, 0.2, 0.9)},
 }
 
 

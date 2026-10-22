@@ -64,9 +64,16 @@ const BOSSES := {
 		"win": "> SEÑAL RESTABLECIDA",
 		"floor": "estudio",
 	},
+	"sudo": {
+		"script": "res://scripts/combat/boss_sudo.gd",
+		"name": "SUDO",
+		"title": ["> sudo: LÍDER DEL CLUB IA", "La charla que no te puedes saltar", "Club IA"],
+		"win": "> SESIÓN TERMINADA",
+		"floor": "auditorio",
+	},
 }
 
-## Boss de esta arena ("deadbeef", "bsod", "div0", "syntax", "stack", "judge", "tex" o "kp").
+## Boss de esta arena ("deadbeef", "bsod", "div0", "syntax", "stack", "judge", "tex", "kp" o "sudo").
 static var boss_kind: String = "deadbeef"
 
 ## Al salir (Esc, o tras ganar/perder) se vuelve al Salón de las Facultades.
@@ -75,7 +82,7 @@ const ARENA := Rect2(-520, -330, 1040, 660)
 ## Música de cada boss: <boss>_p1/_p2/_p3 (una por fase, cada vez más intensa), _win al vencerlo y lose.ogg al perder.
 ## Generada por tools/boss_music.py. La fase 1 trae una intro de 2 compases y hace loop desde aquí (segundos).
 const MUSIC_DIR := "res://assets/audio/bosses/"
-const MUSIC_INTRO := {"deadbeef": 3.2, "bsod": 4.0, "div0": 3.75, "syntax": 3.8095, "stack": 3.3333, "judge": 4.0678, "tex": 2.4, "kp": 3.2877}
+const MUSIC_INTRO := {"deadbeef": 3.2, "bsod": 4.0, "div0": 3.75, "syntax": 3.8095, "stack": 3.3333, "judge": 4.0678, "tex": 2.4, "kp": 3.2877, "sudo": 3.75}
 const MUSIC_DB := -6.0
 const WALL := 40.0
 
@@ -577,6 +584,9 @@ class Floor extends Node2D:
 		if style == "estudio":
 			_estudio()
 			return
+		if style == "auditorio":
+			_auditorio()
+			return
 		draw_rect(arena.grow(140.0), Color(0.16, 0.18, 0.17))
 		var tile := 48.0
 		var y := arena.position.y
@@ -928,3 +938,46 @@ class Floor extends Node2D:
 			draw_rect(Rect2(fx + 2, top - 72, 34, 8), Color(0.85, 0.15, 0.15))
 		draw_string(ThemeDB.fallback_font, Vector2(c.x - 300, top - 20), "ULEAM · TRIBUNAL DE LA FACULTAD", HORIZONTAL_ALIGNMENT_CENTER, 600, 13, Color(0.95, 0.85, 0.55))
 		draw_rect(arena, Color(0.85, 0.65, 0.25), false, 4.0)
+
+	## Auditorio del Club IA: alfombra oscura, escenario de madera, pantalla gigante y butacas.
+	func _auditorio() -> void:
+		draw_rect(arena.grow(140.0), Color(0.07, 0.08, 0.1))
+		var tile := 40.0
+		var y := arena.position.y
+		var row := 0
+		while y < arena.end.y:
+			var x := arena.position.x
+			var col := 0
+			while x < arena.end.x:
+				var c := Color(0.17, 0.19, 0.24) if (row + col) % 2 == 0 else Color(0.15, 0.17, 0.22)
+				draw_rect(Rect2(x, y, minf(tile, arena.end.x - x), minf(tile, arena.end.y - y)), c)
+				x += tile
+				col += 1
+			y += tile
+			row += 1
+		# escenario de madera arriba
+		var stage := Rect2(arena.position.x + 120, arena.position.y, arena.size.x - 240, 150)
+		draw_rect(stage, Color(0.42, 0.29, 0.18))
+		for i in 12:
+			var sx := stage.position.x + i * stage.size.x / 12.0
+			draw_line(Vector2(sx, stage.position.y), Vector2(sx, stage.end.y), Color(0.32, 0.21, 0.12), 2.0)
+		draw_rect(Rect2(stage.position.x, stage.end.y - 8, stage.size.x, 8), Color(0.25, 0.16, 0.09))
+		# pantalla gigante en la pared
+		var scr := Rect2(arena.position.x + 300, arena.position.y - 96, arena.size.x - 600, 86)
+		draw_rect(scr.grow(6), Color(0.1, 0.1, 0.12))
+		draw_rect(scr, Color(0.05, 0.14, 0.1))
+		draw_string(ThemeDB.fallback_font, scr.position + Vector2(0, 40), "CLUB IA", HORIZONTAL_ALIGNMENT_CENTER, scr.size.x, 26, Color(0.4, 1.0, 0.65))
+		draw_string(ThemeDB.fallback_font, scr.position + Vector2(0, 66), "charla abierta · casa abierta ULEAM", HORIZONTAL_ALIGNMENT_CENTER, scr.size.x, 12, Color(0.85, 0.9, 0.9))
+		# filas de butacas a los lados (decorado, abajo)
+		for side in [-1.0, 1.0]:
+			for r in 3:
+				for k in 4:
+					var bx := (arena.position.x + 30 + k * 34) if side < 0 else (arena.end.x - 64 - k * 34)
+					var by := arena.end.y - 150 + r * 46
+					draw_rect(Rect2(bx, by, 28, 22), Color(0.45, 0.1, 0.12))
+					draw_rect(Rect2(bx, by - 8, 28, 10), Color(0.55, 0.14, 0.16))
+		# focos
+		for i in 4:
+			var fx := arena.position.x + 200 + i * (arena.size.x - 400) / 3.0
+			draw_colored_polygon(PackedVector2Array([Vector2(fx - 8, arena.position.y - 10), Vector2(fx + 8, arena.position.y - 10), Vector2(fx + 90, arena.position.y + 220), Vector2(fx - 90, arena.position.y + 220)]), Color(1, 1, 0.9, 0.035))
+		draw_rect(arena, Color(0.05, 0.05, 0.07), false, 4.0)

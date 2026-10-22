@@ -19,15 +19,15 @@ const MUSIC := "res://assets/audio/hall/hall_ambient.ogg"
 const STATUE_DIR := "res://assets/sprites/statues/statue_%s.png"
 
 ## Orden de las estatuas, de izquierda a derecha.
-const ORDER := ["deadbeef", "bsod", "div0", "syntax", "stack", "judge", "tex", "kp"]
+const ORDER := ["deadbeef", "bsod", "div0", "syntax", "stack", "judge", "tex", "kp", "sudo"]
 ## Color de acento de cada facultad (el mismo de las antiguas puertas del campus).
 const ACCENT := {
 	"deadbeef": Color(1.0, 0.3, 0.2), "bsod": Color(0.3, 0.6, 1.0), "div0": Color(1.0, 0.78, 0.2),
 	"syntax": Color(0.45, 0.9, 0.55), "stack": Color(1.0, 0.6, 0.15), "judge": Color(0.9, 0.3, 0.3),
-	"tex": Color(1.0, 0.3, 1.0), "kp": Color(1.0, 0.65, 0.2),
+	"tex": Color(1.0, 0.3, 1.0), "kp": Color(1.0, 0.65, 0.2), "sudo": Color(0.3, 0.9, 0.6),
 }
 
-const SPACING := 300.0
+const SPACING := 270.0   ## 9 estatuas (con 8 era 300)
 const FEET_Y := -124.0          ## pies de la estatua (arriba del pedestal)
 const FRONT_Y := -84.0          ## frente del pedestal / borde del piso caminable
 const HALL := Rect2(-1290, -470, 2580, 740)

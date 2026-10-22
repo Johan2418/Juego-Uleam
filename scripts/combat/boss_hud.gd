@@ -22,6 +22,7 @@ static func make(kind: String, boss: Node) -> Control:
 		"judge": p = Judge.new()
 		"tex": p = Tex.new()
 		"kp": p = Kp.new()
+		"sudo": p = Sudo.new()
 		_: p = Deadbeef.new()
 	p.boss = boss
 	p.position = Vector2((1280.0 - W) * 0.5, 6)
@@ -892,3 +893,62 @@ class Kp extends Base:
 		K.text(self, sr.position + Vector2(0, 17), label, 12, Color.WHITE, Color(0, 0, 0, 0.5), HORIZONTAL_ALIGNMENT_CENTER, sr.size.x)
 		K.text(self, Vector2(r.end.x - 46, r.position.y + 13), "Pánicos", 10, Color(0.8, 0.8, 0.9), Color(0, 0, 0, 0))
 		K.text(self, Vector2(r.end.x - 46, r.position.y + 28), "%d" % int(boss.get("panics")), 14, Color.WHITE, Color(0, 0, 0, 0), HORIZONTAL_ALIGNMENT_CENTER, 42)
+
+
+# --- 9 · SUDO (Club IA): diapositiva; el panel es la VENTANA DE CONTEXTO en tokens --------
+
+class Sudo extends Base:
+	func _theme() -> void:
+		title = "SUDO"
+		bar_label = "ENERGÍA"
+		phase_names = ["Demo en vivo · Supabase + Cursor", "Agentes + Auth · Grokbot · Clerk", "GPT · Terra · Luna · Sol"]
+		enraged_name = "SOL · MODO ULTRA"
+		c_frame = Color(0.1, 0.11, 0.13)
+		c_light = Color(0.35, 0.75, 0.55)
+		c_dark = Color(0.02, 0.03, 0.03)
+		c_accent = Color(0.12, 0.55, 0.35)
+		c_fill = Color(0.2, 0.75, 0.5)
+		c_fill_hi = Color(0.65, 1.0, 0.8)
+		c_back = Color(0.04, 0.06, 0.05)
+		c_mech = Color(0.03, 0.04, 0.05, 0.96)
+
+	func _header_extra(r: Rect2) -> void:
+		if not alive():
+			return
+		if bool(boss.get("hallucinating")):
+			var on := fmod(t, 0.5) < 0.3
+			K.text(self, Vector2(r.end.x - 196, r.position.y + 15), "¿ALUCINANDO?", 12, Color(0.75, 0.8, 1.0) if on else Color(1, 0.6, 0.6))
+
+	func _mech(r: Rect2) -> void:
+		if not alive():
+			return
+		var ctx: float = float(boss.get("context"))
+		var mx: float = float(boss.call("ctx_max"))
+		var kx := clampf(ctx / maxf(1.0, mx), 0.0, 1.0)
+		var over: float = float(boss.get("overflow_left"))
+		K.text(self, Vector2(r.position.x + 6, r.position.y + 13), "VENTANA DE CONTEXTO", 10, Color(0.6, 0.9, 0.75), Color(0, 0, 0, 0))
+		K.text(self, Vector2(r.position.x + 6, r.position.y + 27), "%dk / %dk tokens" % [int(ctx * 1.28), int(mx * 1.28)], 11, Color.WHITE, Color(0, 0, 0, 0))
+		var bar := Rect2(r.position.x + 150, r.position.y + 5, r.size.x - 160, r.size.y - 10)
+		draw_rect(bar, Color(0.08, 0.1, 0.1))
+		if over > 0.0:
+			var on := fmod(t, 0.3) < 0.18
+			draw_rect(bar, Color(0.75, 0.1, 0.1) if on else Color(0.45, 0.05, 0.05))
+			K.text(self, bar.position + Vector2(0, 19), "¡CONTEXT OVERFLOW!  DAÑO x2", 14, Color(1, 1, 0.6) if on else Color.WHITE, Color(0, 0, 0, 0.6), HORIZONTAL_ALIGNMENT_CENTER, bar.size.x)
+			draw_rect(Rect2(bar.position.x, bar.end.y - 3, bar.size.x * clampf(over / 3.2, 0.0, 1.0), 3), Color(1, 0.9, 0.5))
+		else:
+			# bloques de tokens: verde -> amarillo -> rojo
+			var n := 32
+			var bw := bar.size.x / n
+			for i in n:
+				var f := float(i) / n
+				if f >= kx:
+					break
+				var col := Color(0.25, 0.85, 0.5).lerp(Color(1, 0.85, 0.2), clampf(f * 1.6, 0.0, 1.0))
+				if f > 0.75:
+					col = col.lerp(Color(1, 0.25, 0.2), (f - 0.75) * 4.0)
+				draw_rect(Rect2(bar.position.x + i * bw + 1, bar.position.y + 2, bw - 2, bar.size.y - 4), col)
+			if kx > 0.8 and fmod(t, 0.4) < 0.2:
+				draw_rect(bar, Color(1, 0.3, 0.2, 0.25))
+			K.text(self, bar.position + Vector2(0, 19), "parry = +tokens  ·  llena = OVERFLOW", 11, Color(1, 1, 1, 0.55), Color(0, 0, 0, 0), HORIZONTAL_ALIGNMENT_CENTER, bar.size.x)
+		draw_rect(bar, Color(0.35, 0.75, 0.55), false, 1.5)
+

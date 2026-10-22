@@ -300,7 +300,7 @@ func _paint() -> void:
 	c.draw_string(f, Vector2(x0, 64), "TU UNIVERSITARIO", HORIZONTAL_ALIGNMENT_LEFT, -1, 13, GOLD)
 	c.draw_string(f, Vector2(x0, 96), "Clase y técnicas", HORIZONTAL_ALIGNMENT_LEFT, -1, 30, TEXT)
 	var won := GameState.bosses_defeated.size()
-	c.draw_string(f, Vector2(x0, 96), "%d / 8 técnicas conseguidas" % mini(won, 8), HORIZONTAL_ALIGNMENT_RIGHT, 700, 13, DIM)
+	c.draw_string(f, Vector2(x0, 96), "%d / %d técnicas conseguidas" % [mini(won, Tech.DATA.size()), Tech.DATA.size()], HORIZONTAL_ALIGNMENT_RIGHT, 700, 13, DIM)
 	c.draw_line(Vector2(x0, 110), Vector2(1240, 110), LINE, 1.0)
 	# clase: 3 tarjetas
 	var cy := 124.0

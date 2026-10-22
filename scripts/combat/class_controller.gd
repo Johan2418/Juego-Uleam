@@ -82,6 +82,9 @@ var _action_token: int = 0
 var tech: Dictionary = {"combo": "", "special": "", "ultimate": ""}
 var _cur_kind: String = ""
 var _parasite_used: bool = false
+var _echo_used: bool = false
+## SUDO (Clerk) puede bloquear la ultimate unos segundos: hasta este segundo (reloj de _now()).
+var ult_locked_until: float = 0.0
 var _interest: int = 0
 var _interest_idle: float = 0.0
 var _badge: Node2D = null
@@ -147,6 +150,7 @@ func _do_combo_step() -> void:
 	var step := combo_step
 	if step == 0:
 		_parasite_used = false
+		_echo_used = false
 	combo_step = (combo_step + 1) % 3
 	_in_primary = true
 	_combo_buffered = false
@@ -310,6 +314,9 @@ func ultimate_ready() -> bool:
 
 func try_ultimate() -> void:
 	if busy or not ultimate_ready():
+		return
+	if _now() < ult_locked_until:
+		Tech.float_text(player.get_parent(), player.global_position + Vector2(0, -110), "401 BLOQUEADA", Color(0.6, 0.45, 1.0), 14)
 		return
 	ultimate_meter = 0.0
 	meter_changed.emit(ultimate_meter)
@@ -975,6 +982,15 @@ func _combo_landed(node: Node) -> void:
 				player.get_parent().add_child(dr)
 				if player.has_method("heal"):
 					player.call("heal", 1)
+		"autocompletar":
+			if _cur_kind.ends_with("finisher") and not _echo_used and node is Node2D:
+				_echo_used = true
+				var e := Tech.Echo.new()
+				e.target = node as Node2D
+				e.at = aim_of(node)
+				e.damage = maxi(1, _hit_damage)
+				e.from = player.global_position
+				player.get_parent().add_child(e)
 
 
 func _set_interest(n: int) -> void:

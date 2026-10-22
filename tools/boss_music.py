@@ -757,6 +757,18 @@ SPECS = {
         chA=["F", "F", "Dm", "Dm", "Bb", "C", "F", "C"],
         chB=["Bb", "C", "Am", "Dm", "Gm", "C", "F", "C"],
     ),
+    # 9. Club IA: SUDO, el expositor. Fa# menor, synthwave de "keynote" con bips de datos y arpegios desde el inicio.
+    "sudo": dict(
+        bpm=[128, 136, 148], scale="F# G# A B C# D E".split(), tonic=6, lead="cold", harm_lead="pulse",
+        rhythm="stab", bass="oct", bass_type="sub", drums="disco", signature=("hex",), arp_from=1, intro_chord="F#m",
+        stab_at=(0, 3, 6), lead_gain=0.22,
+        A=M("F#5:2 C#6:2 A5:1 B5:1 C#6:2 | E6:2 D6:1 C#6:1 B5:2 A5:2 | F#5:2 A5:2 C#6:2 F#6:2 | E6:6 r:2 |"
+            "D6:2 C#6:1 B5:1 A5:2 B5:2 | C#6:2 E6:2 A5:4 | B5:2 D6:2 F#6:2 E6:2 | C#6:4 G#5:4"),
+        B=M("A5:3 B5:1 C#6:2 E6:2 | F#6:4 E6:2 C#6:2 | D6:2 F#6:2 A6:2 F#6:2 | E6:6 r:2 |"
+            "D6:2 E6:2 F#6:2 A6:2 | G#6:2 E6:2 C#6:4 | F#6:3 E6:1 D6:2 C#6:2 | C#6:8"),
+        chA=["F#m", "D", "A", "E", "Bm", "A", "D", "C#"],
+        chB=["D", "E", "Bm", "A", "D", "E", "F#m", "C#"],
+    ),
 }
 
 

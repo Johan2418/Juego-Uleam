@@ -1,4 +1,4 @@
-# Guía de los 8 bosses
+# Guía de los 9 bosses
 
 Cada boss pertenece a una facultad de la ULEAM y tiene un ataque por cada carrera. Además, cada uno tiene una mecánica propia (su "algo especial") que cambia la forma de pelear contra él. Todos tienen 3 fases (su mecánica se complica en cada una), una lluvia de ataques al cambiar de fase y un DUELO FINAL propio cuando quedan a un golpe, con música que sube en 3 niveles y cierre épico.
 
@@ -84,5 +84,16 @@ Cada boss pertenece a una facultad de la ULEAM y tiene un ataque por cada carrer
 - **Por fase:** F3 dos cámaras en vivo y una de utilería.
 - **Duelo final:** ÚLTIMA TRANSMISIÓN (romper la cámara que se enciende antes de su cuenta atrás).
 
+## 9. SUDO
+- **Facultad:** Club IA (no es facultad; estatua n.º 9 del Salón, siempre disponible).
+- **Concepto:** el Líder del Club IA (persona real, por su foto): expositor con clicker y pantalla de proyector flotante. Único boss humano.
+- **Lo especial:** VENTANA DE CONTEXTO. Cada ataque suyo y cada parry tuyo le suman tokens; al llenarse, CONTEXT OVERFLOW: aturdido 3,2 s con daño x2 y luego se "compacta".
+- **Ataques:** F1 Supabase + Cursor (rayo de la base, Realtime, Row Level Security, Edge Function devolvible con parry, Tab Tab Tab, Cmd+K, modo agente). F2 Grokbot + Clerk (grokbots que generan bloques, Imagine, lote de tareas, muros de login, sesión expirada, 2FA, acceso revocado). F3 Terra, Luna y Sol (lunas bumerán, eclipse, placas tectónicas, órbita, llamarada solar que tapan las rocas, supernova).
+- **Música:** synthwave de "keynote" en Fa# menor con bips de datos.
+- **Diseño:** https://claude.ai/artifact/2JUPWg5GXDgzCFkxQMgdjT
+- **Por fase:** F2 alucina (1 de cada 4 ataques es falso: transparente y sin daño); F3 cada astro suma tokens y golpear un astro lo apaga 6 s.
+- **Duelo final:** ASTRA, cinemática con QTE (¡ESQUIVA! rodar · ¡DEVUÉLVELO! parry · ¡EMPUJA! machacar ataque). Fallar = muerte instantánea. Remate: se desvanece en polvo de estrellas (SESIÓN TERMINADA).
+- **Técnica:** Autocompletar (combo).
+
 ## Estado
-Los 8 tienen sprites, puerta en el campus y música por fase. Todavía faltan los efectos de sonido y tu prueba en el editor.
+Los 8 de facultad tienen sprites y música por fase; SUDO (9) es jugable con figuras de código y música propia, esperando sus hojas de grokbot. Todavía faltan los efectos de sonido y tu prueba en el editor.
