@@ -203,11 +203,28 @@ const ANIMS := {
 	"dizzy": [["dizzy_0", "dizzy_1"], 3.0, true],
 	"kneel": [["kneel_0", "kneel_1"], 2.0, false],
 	"fade": [["fade_0", "fade_1"], 1.4, false],
+	# poses de poder (ronda épica de grokbot)
+	"charge": [["charge_0"], 1.0, false],
+	"shout": [["shout_0"], 1.0, false],
+	"leap": [["leap_0"], 1.0, false],
+	"slam": [["slam_0"], 1.0, false],
+	"invoke": [["invoke_0"], 1.0, false],
+	"throw": [["throw_0"], 1.0, false],
+	"push": [["push_0"], 1.0, false],
+	"victory": [["victory_0", "laugh_0"], 2.5, true],
 }
+## Si faltan las poses de poder (hojas viejas), se usan estas.
+const POSE_FALLBACK := {"charge": "crouch", "shout": "laugh", "leap": "dash", "slam": "stomp", "invoke": "summon", "throw": "point", "push": "point", "victory": "laugh"}
+## Poses que tiemblan de tensión (cargar, gritar, forcejear).
+const TREMBLE := ["charge", "shout", "push"]
+## Poses en el aire: se dibujan un poco más arriba.
+const AIR := {"leap": -18.0}
 ## Dónde queda la mano del clicker en cada pose (pies en 0); sirve para que salgan de ahí los rayos y el clicker.
 const HAND := {
 	"idle": Vector2(-38, -140), "walk": Vector2(-34, -132), "raise": Vector2(-30, -232), "point": Vector2(-14, -150),
 	"spread": Vector2(-70, -136), "summon": Vector2(-40, -228), "flinch": Vector2(-52, -116), "dizzy": Vector2(-40, -92),
+	"charge": Vector2(-36, -96), "shout": Vector2(-40, -118), "leap": Vector2(-52, -124), "slam": Vector2(-6, -8),
+	"invoke": Vector2(-40, -232), "throw": Vector2(-2, -148), "push": Vector2(-6, -142), "victory": Vector2(-38, -214),
 }
 
 
@@ -232,7 +249,7 @@ func pose_name() -> String:
 	if state == "stunned":
 		return "flinch"
 	if _dashing:
-		return "dash"
+		return "leap" if Spr.tex("boss_sudo_leap_0") else "dash"
 	var l := arm_l.rotation
 	var r := -arm_r.rotation
 	var up_l := l > 1.9
@@ -259,6 +276,8 @@ func pose_frame() -> String:
 		_pose_cur = p
 		_pose_since = _t
 	var a: Array = ANIMS.get(p, ANIMS["idle"])
+	if Spr.tex("boss_sudo_" + str(a[0][0])) == null and POSE_FALLBACK.has(p):
+		a = ANIMS[POSE_FALLBACK[p]]
 	var frames: Array = a[0]
 	var i := int((_t - _pose_since) * float(a[1]))
 	i = i % frames.size() if bool(a[2]) else mini(i, frames.size() - 1)
@@ -266,7 +285,7 @@ func pose_frame() -> String:
 
 
 func pose_flipped() -> bool:
-	return _pose_cur == "dash" and dash_flip
+	return (_pose_cur == "dash" or _pose_cur == "leap") and dash_flip
 
 
 func _build_rig() -> void:
@@ -578,6 +597,20 @@ func _ring(at: Vector2, col: Color, r: float, life: float = 0.45, width: float =
 	_fx(g, at)
 
 
+## Efecto animado de la ronda épica (fxbolt, fxfire, fxcosmic, fxsun, fxdata). No hace nada si falta la hoja.
+func _anim(prefix: String, at: Vector2, k: float, fps: float = 14.0, glow: Color = Color(0, 0, 0, 0), frames: Array = []) -> Node2D:
+	if not Fx.Anim.ok(prefix):
+		return null
+	var a := Fx.Anim.new()
+	a.prefix = prefix
+	a.k = k
+	a.fps = fps
+	a.glow = glow
+	if not frames.is_empty():
+		a.frames = frames
+	return _fx(a, at)
+
+
 func _burst(at: Vector2, col: Color, count: int = 18, speed: float = 320.0) -> void:
 	var b := Fx.Burst.new()
 	b.col = col
@@ -712,6 +745,7 @@ func _atk_bolt(tok: int) -> void:
 	_pose(Vector2(0, -6), -0.03, 0.25)
 	body.mood = 1
 	_charge(global_position + HAND["raise"], Fx.GREEN_HI, 0.45, 110.0, self)
+	_hint("charge", 0.25)
 	if not await _wait(0.5, tok):
 		return
 	_click()
@@ -803,6 +837,7 @@ func edge_reflected(_ball: Node) -> void:
 	if state in ["dead", "final", "intro", "transition"]:
 		return
 	GameFeel.parry_burst(get_parent(), global_position + CENTER, 40.0)
+	_anim("fxdata", global_position + CENTER, 0.7, 16.0)
 	take_hit(3, global_position + CENTER + Vector2(0, 40))
 
 
@@ -850,12 +885,13 @@ func _atk_tab(tok: int) -> void:
 		_dashing = false
 		_clamp_inside()
 		_impact(global_position, 3.0)
-		_hint("stomp", 0.2)
+		_hint("slam" if i == n - 1 and not _fake else "stomp", 0.35 if i == n - 1 else 0.2)
 		if not _fake:
 			_ring(global_position, Color(0.55, 0.8, 1.0), 140.0, 0.3, 7.0)
 			_burst(global_position + Vector2(0, -10), Color(0.7, 0.85, 1.0), 12, 260.0)
 			if i == n - 1:
 				_cam_punch(0.05)
+				_anim("fxdata", global_position + Vector2(0, -30), 0.8, 16.0, Color(0.4, 0.6, 1.0, 0.2))
 		if not await _wait(0.22, tok):
 			return
 	_end_attack(tok)
@@ -912,7 +948,7 @@ func _atk_pulse(tok: int) -> void:
 	_pose(Vector2(0, 8), 0.0, 0.06)
 	_tw(arm_l, "rotation", 0.4, 0.06)
 	_tw(arm_r, "rotation", -0.4, 0.06)
-	_hint("stomp", 0.45)
+	_hint("slam", 0.55)
 	_ring(global_position, Fx.GREEN_HI, 250.0, 0.45, 12.0)
 	_flash(Fx.GREEN_HI, 0.15, 0.25)
 	_cam_punch(0.05)
@@ -1228,6 +1264,7 @@ func _atk_moons(tok: int) -> void:
 	_tw(arm_l, "rotation", PI * 0.75, 0.2)
 	if not await _wait(0.35, tok):
 		return
+	_hint("throw", 0.5)
 	var from := _planet_pos("luna")
 	var n := 8 if not enraged else 12
 	var base := _dir_to_player(from).angle()
@@ -1254,6 +1291,7 @@ func _atk_eclipse(tok: int) -> void:
 		_planet_pin.clear()
 		return
 	var sky := global_position + Vector2(0, -290)
+	_hint("invoke", 3.8)
 	_ring(sky, Color(0.85, 0.9, 1.0), 160.0, 0.6, 8.0)
 	_burst(sky + Vector2(16, -14), Color(1, 1, 1), 14, 220.0)
 	_flash(Color(1, 1, 1), 0.35, 0.3)
@@ -1296,14 +1334,16 @@ func _atk_quake(tok: int) -> void:
 	_tw(arm_l, "rotation", PI * 0.85, 0.2)
 	if _planet("terra"):
 		_charge(_planet_pos("terra"), Color(1.0, 0.55, 0.2), 0.45, 100.0, _planet("terra"))
+	_hint("charge", 0.5)
 	if not await _wait(0.5, tok):
 		return
 	_pose(Vector2(0, 8), 0.0, 0.06)
 	_tw(arm_l, "rotation", PI * 0.2, 0.06)
-	_hint("stomp", 0.45)
+	_hint("slam", 0.55)
 	_impact(global_position, 9.0)
 	_ring(global_position, Color(1.0, 0.6, 0.25), 300.0, 0.5, 14.0)
 	_flash(Color(1.0, 0.6, 0.3), 0.14, 0.3)
+	_anim("fxfire", global_position + Vector2(0, -40), 0.85, 15.0, Color(1.0, 0.5, 0.1, 0.25))
 	_cam_punch(0.07)
 	var origin := global_position + Vector2(_planet(  "terra").position.x if _planet("terra") else 0.0, 0)
 	var n := 3 if not enraged else 5
@@ -1356,6 +1396,7 @@ func _atk_flare(tok: int) -> void:
 		_planet_pin.erase("sol")
 		return
 	_charge(_planet_pos("sol"), Fx.SUN, 0.5, 150.0, _planet("sol"))
+	_hint("invoke", 1.2)
 	if not await _wait(0.3, tok):
 		_planet_pin.erase("sol")
 		return
@@ -1374,6 +1415,7 @@ func _atk_flare(tok: int) -> void:
 		_planet_pin.erase("sol")
 		return
 	_flash(Color(1.0, 0.5, 0.1), 0.18, sweep + 0.3)
+	_hint("shout", sweep)
 	_cam_punch(0.04, 0.3)
 	var st := 0.0
 	while st < sweep:
@@ -1393,6 +1435,7 @@ func _atk_flare(tok: int) -> void:
 func _atk_nova(tok: int) -> void:
 	var sol := _planet("sol")
 	_planet_pin["sol"] = Vector2(0, -60)
+	_hint("invoke", 0.85)
 	_tw(arm_l, "rotation", PI * 0.9, 0.3)
 	_tw(arm_r, "rotation", -PI * 0.9, 0.3)
 	if sol:
@@ -1402,10 +1445,16 @@ func _atk_nova(tok: int) -> void:
 			grow.tween_property(sol, "scale", Vector2.ONE * (1.25 + 0.3 * k), 0.08)
 		_tweens.append(grow)
 		_charge(global_position + Vector2(0, -60), Fx.SUN, 0.8, 220.0, self)
+		var sa := _anim("fxsun", sol.global_position, 0.9, 8.0, Color(1.0, 0.6, 0.1, 0.25), [0, 1, 2, 3])
+		if sa:
+			sa.set("loop", true)
+			sa.set("life", 0.85)
+			sa.set("follow", sol)
 	if not await _wait(0.85, tok):
 		_planet_pin.erase("sol")
 		return
 	_flash(Color(1, 0.95, 0.8), 0.55, 0.45)
+	_hint("shout", 1.5)
 	_cam_punch(0.09, 0.35)
 	var em := Fx.Embers.new()
 	em.area = Rect2(-420, -320, 840, 560)
@@ -1419,6 +1468,7 @@ func _atk_nova(tok: int) -> void:
 		_add_fx(ring, global_position)
 		_ring(global_position, Color(1.0, 0.55, 0.15), 520.0, 520.0 / 330.0, 22.0)
 		_burst(global_position + Vector2(0, -60), Fx.SUN, 20, 420.0)
+		_anim("fxfire", global_position + Vector2(0, -50), 1.7 + 0.5 * i, 13.0, Color(1.0, 0.45, 0.1, 0.3))
 		_planet_glow("sol")
 		_shake(6.0, 0.2)
 		if not await _wait(0.5, tok):
@@ -1640,6 +1690,7 @@ func _enter_phase(n: int) -> void:
 	if n == 2:
 		body.sleeves = true
 	_say(PHASE_NAMES[n - 1], Color(0.9, 0.35, 0.3), 1.4)
+	_hint("shout", 1.5)
 	GameFeel.flash(rig, 0.3, Color(1.0, 0.5, 0.4))
 	_pose(Vector2(0, -12), 0.0, 0.25)
 	_tw(arm_r, "rotation", -PI * 0.9, 0.25)
@@ -1665,6 +1716,7 @@ func _enrage() -> void:
 	state = "transition"
 	body.mood = 1
 	_say("¡SOL · MODO ULTRA!", Color(1, 0.55, 0.15), 1.4)
+	_hint("shout", 1.3)
 	_pose(Vector2(0, -14), 0.0, 0.3)
 	GameFeel.flash(rig, 0.4, Color(1.0, 0.7, 0.3))
 	_shake(9.0, 1.0)
@@ -1713,6 +1765,7 @@ func _start_final() -> void:
 	screen.mode = "astra"
 	body.mood = 1
 	_say("Terra, Luna, Sol... ¡ALINEACIÓN!", Color(0.6, 0.5, 1.0), 1.6)
+	_hint("charge", 1.0)
 	if not await _wait(1.0, tok):
 		return
 	Final.title(self, "ASTRA", Color(0.8, 0.75, 1.0), "el modelo más fuerte", 1.6)
@@ -1746,6 +1799,7 @@ func _start_final() -> void:
 	ball.global_position = global_position + Vector2(0, -300)
 	_cinema.append(ball)
 	GameFeel.parry_burst(get_parent(), ball.global_position, 60.0)
+	_anim("fxcosmic", ball.global_position, 0.9, 14.0, Color(0.6, 0.4, 1.0, 0.3))
 	_flash(Color(0.85, 0.8, 1.0), 0.5, 0.4)
 	_ring(ball.global_position, Color(0.75, 0.65, 1.0), 360.0, 0.6, 14.0)
 	_shake(6.0, 0.4)
@@ -1757,6 +1811,7 @@ func _start_final() -> void:
 	_music_cue("final2")
 	_tw(spiral, "grow", 1.0, 2.2).set_trans(Tween.TRANS_SINE)
 	_say("Les presento... ¡ASTRA!", Color(0.75, 0.65, 1.0), 2.0)
+	_hint("invoke", 3.6)
 	if not await _wait(2.6, tok):
 		return
 	# se concentra en la bola de luz
@@ -1785,6 +1840,7 @@ func _start_final() -> void:
 	var throw := create_tween()
 	throw.tween_property(ball, "global_position", target, 0.45).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
 	_tweens.append(throw)
+	_hint("throw", 1.2)
 	var q1 := _qte("timing", "roll", "¡ESQUIVA!", 1.2, 0.6, 0.86)
 	q1.pressed.connect(_qte_roll)
 	var ok1: bool = await q1.done
@@ -1828,6 +1884,7 @@ func _start_final() -> void:
 	_flash(Color(0.7, 0.9, 1.0), 0.35, 0.3)
 	_ring(ball.global_position, Color(0.6, 0.85, 1.0), 260.0, 0.45, 12.0)
 	_burst(ball.global_position, Color(0.8, 0.9, 1.0), 24, 420.0)
+	_anim("fxcosmic", ball.global_position, 1.3, 15.0, Color(0.6, 0.4, 1.0, 0.3))
 	GameFeel.parry_burst(get_parent(), ball.global_position, 50.0)
 	GameFeel.hit_stop(get_tree(), 0.12)
 	_shake(8.0, 0.3)
@@ -1850,7 +1907,7 @@ func _start_final() -> void:
 	while is_instance_valid(q3) and q3.result == 0 and tok == _tok:
 		clash.k = q3.meter
 		clash.b = _hand_pos(arm_r)
-		_hint("point", 0.2)
+		_hint("push" if Spr.tex("boss_sudo_push_0") else "point", 0.2)
 		_shake(1.5, 0.05)
 		if Engine.get_process_frames() % 6 == 0 and is_instance_valid(ball):
 			_burst(ball.global_position, Color(0.85, 0.85, 1.0), 6, 300.0)
@@ -1866,6 +1923,10 @@ func _start_final() -> void:
 
 
 func _qte(mode: String, action: String, title: String, dur: float, from: float, to: float) -> Node:
+	# el aviso anterior se quita ya (si no, los dos títulos se montan)
+	for n in _cinema:
+		if is_instance_valid(n) and n is Fx.Qte:
+			n.queue_free()
 	var q := Fx.Qte.new()
 	q.mode = mode
 	q.action = action
@@ -1968,6 +2029,7 @@ func _astra_win(tok: int, ball: Node2D) -> void:
 	get_parent().add_child(w)
 	_shake(14.0, 0.8)
 	_clear_cinema()
+	_anim("fxcosmic", global_position + CENTER, 2.6, 8.0, Color(0.6, 0.4, 1.0, 0.35))
 	await _finisher()
 	hp = 0
 	hp_changed.emit(hp, MAX_HP)
@@ -1977,7 +2039,7 @@ func _astra_win(tok: int, ball: Node2D) -> void:
 ## Fallaste: la espiral te atraviesa. Muerte instantánea.
 func _astra_fail(tok: int, ball: Node2D) -> void:
 	_say("Sesión cerrada.", Color(0.6, 0.5, 1.0), 1.4)
-	_hint("laugh", 3.0)
+	_hint("victory" if Spr.tex("boss_sudo_victory_0") else "laugh", 3.0)
 	if _player_ok() and is_instance_valid(ball):
 		var rush := create_tween()
 		rush.tween_property(ball, "global_position", _player_body(), 0.15)
@@ -2135,7 +2197,7 @@ func start_intro(skip: bool) -> void:
 	GameFeel.hit_stop(get_tree(), 0.1)
 	arm_r.charge = 1.0
 	_say("¡EMPECEMOS LA DEMO!", Color(0.15, 0.75, 0.45), 1.3)
-	_hint("laugh", 0.6)
+	_hint("shout", 0.9)
 	await get_tree().create_timer(1.3).timeout
 	_rest_pose()
 	_rest_arms()
@@ -2232,7 +2294,12 @@ class Body extends Node2D:
 			if tex:
 				var sz := tex.get_size()
 				var flip: bool = bool(boss.call("pose_flipped"))
-				draw_set_transform(recoil * 0.5, 0.0, Vector2(-1.0 if flip else 1.0, 1.0))
+				var off := recoil * 0.5
+				var pn: String = str(boss.get("_pose_cur"))
+				if TREMBLE.has(pn):
+					off += Vector2(randf_range(-1.5, 1.5), randf_range(-1.0, 1.0))
+				off.y += float(AIR.get(pn, 0.0))
+				draw_set_transform(off, 0.0, Vector2(-1.0 if flip else 1.0, 1.0))
 				draw_texture(tex, Vector2(-sz.x * 0.5, -sz.y))
 				draw_set_transform(Vector2.ZERO)
 				return

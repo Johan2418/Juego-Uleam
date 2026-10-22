@@ -4,7 +4,7 @@
 > **Regla de oro:** ANTES de tocar nada, lee este archivo completo. AL TERMINAR cada tarea (o antes de que se corte la sesión), actualiza las secciones **Estado actual**, **Trabajo en curso** y **Bitácora**. Si no queda escrito aquí, la otra sesión no lo sabe.
 
 - Ruta del archivo: `C:\Users\leopo\Documents\Juegos\Godot\prototipo\CONTEXTO_PROYECTO.md`
-- Última actualización: 2026-10-22 — ataques de SUDO más épicos (cargas, destellos, estelas, quemaduras)
+- Última actualización: 2026-10-22 — SUDO: poses de poder y efectos animados de grokbot (ronda épica)
 
 ---
 
@@ -201,6 +201,8 @@ J ataque leve (combo) · K especial (cooldown) · L parry · Espacio ultimate (m
 
 - 22-10 ~10:00: **Ataques de SUDO más épicos** (pedido de Johan). Efectos comunes nuevos en `boss_sudo_fx.gd` (sección EFECTOS ÉPICOS): `Flash` (destello a pantalla), `Burst` (chispas con gravedad), `Embers` (brasas), `Scorch` (quemadura en el piso que se enfría), `Ghost` (fantasma de la pose), `Charge` (partículas que se juntan antes del golpe), `Ring` (onda visual gruesa), `SpeedLines`. En `boss_sudo.gd`: `_fx`, `_flash`, `_charge`, `_ring`, `_burst`, `_cam_punch` (zoom rápido, no en la cinemática) y `_ghost`. Cambios: rayo de la base (carga en la mano, nube que se carga arriba, círculo con código girando, rayo grueso con ramas, chispas, onda y quemadura), Tab (chispas al agacharse, estela de fantasmas, líneas de velocidad, onda al aterrizar), Cmd+K (mira que se cierra, código reescribiéndose, explosión con símbolos, onda y chispas), Realtime (arcos eléctricos y pulsos de datos), pulso (onda y destello), placas tectónicas (la Tierra se carga, grietas de lava, rocas que estallan, golpe de cámara), llamarada (el Sol se carga, rayo en capas con ondas de calor, quemaduras y brasas por donde pasa, pantalla caliente y temblor), supernova (el Sol se infla latiendo, destello blanco, anillos de fuego, lluvia de brasas), eclipse (anillo de diamante y estrellas en la oscuridad) y ASTRA (destellos, ondas, líneas de velocidad y chispas en el choque). Solo visual: el daño y los tiempos de esquiva no cambiaron. Verificado: all 40/40, fail 6/6; video `Claude outputs/boss_sudo_epico.mp4`.
 
+- 22-10 ~12:00: **Ronda épica de SUDO integrada** (`GROKBOT_BOSS_9_EPICO.md`, prompts `tools/gen_prompts_boss9_epico.py`). Hoja E `boss_sudo_power8` (grokbot la dibujó ~15 % más grande: `slice_sudo_sheets.py` la escala por el ANCHO DE LA CABEZA, `HEAD_REF`/`HEAD_W`) → poses `charge`, `shout`, `leap`, `slam`, `invoke`, `throw`, `push`, `victory` (`ANIMS`, `HAND`, temblor en `TREMBLE`, `leap` en el aire con `AIR`; si faltan, `POSE_FALLBACK` usa las viejas). Hojas F (8 cuadros en orden) → `boss_sudo_fxbolt|fxfire|fxcosmic|fxsun|fxdata_<0..7>` con `FX_SHEETS` (ancla "ground" para el rayo, "core" para el sol, "center" el resto; el rayo venía sobre fondo MAGENTA y se limpia con `despill(magenta=True)`). Clase `Anim` en `boss_sudo_fx.gd` y `_anim()` en el boss. Dónde salen: rayo de la base (cuadros 2-7 al impactar; el código solo dibuja el tramo del cielo), placas (fuego en cada grieta y en los pies), supernova (sol animado mientras se infla + 3 explosiones de fuego enormes), llamarada (sol animado en la boca del rayo, girado hacia donde dispara), Cmd+K / último aterrizaje del Tab / Edge devuelta (estallido digital), ASTRA (explosión cósmica al fundirse los astros, al devolverla y en el golpe final; la bola usa `fxcosmic_2`). Poses: rayo (carga → clicker arriba), Tab (salto en el aire + golpe al piso en la última), pulso y placas (golpe al piso), lunas (lanzar), eclipse/llamarada/supernova (invocar + gritar), cambios de fase y modo ultra (grito), ASTRA (cargar, invocar, lanzar, forcejeo en el choque y victoria si pierdes). Arreglo: los títulos de los QTE ya no se montan. Verificado: all 40/40, fail 6/6; video `Claude outputs/boss_sudo_ronda_epica.mp4`.
+
 **Siguientes pasos generales (después del Pulido 4):**
 1. Ajustar números a gusto del usuario: cooldowns, daño, ventana/cono del parry, duración de ultimates, frecuencia de ataque del dummy.
 2. Enemigos reales (IA, varios tipos) en lugar del dummy; efectos de sonido.
@@ -209,6 +211,10 @@ J ataque leve (combo) · K especial (cooldown) · L parry · Espacio ultimate (m
 ---
 
 ## 7. Bitácora
+
+### 2026-10-22 (3) — SUDO: ronda épica de grokbot integrada
+- 6 hojas nuevas (poses de poder + 5 efectos animados) recortadas con `slice_sudo_sheets.py` y usadas en los ataques (`Anim`, `_anim`, nuevas poses en `ANIMS`). Títulos de QTE ya no se montan.
+- Verificado (nube, bots): 40/40 y 6/6. Video `Claude outputs/boss_sudo_ronda_epica.mp4`.
 
 ### 2026-10-22 (2) — SUDO: ataques más épicos
 - Efectos nuevos (Flash, Burst, Embers, Scorch, Ghost, Charge, Ring, SpeedLines) en `boss_sudo_fx.gd` y su uso en rayo, Tab, Cmd+K, Realtime, pulso, placas, llamarada, supernova, eclipse y ASTRA. Solo visual.

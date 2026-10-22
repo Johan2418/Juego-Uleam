@@ -128,6 +128,7 @@ class Bolt extends SHazard:
 	var _hit := false
 	var _seed := 0
 	var _branches: Array = []  # [punto de salida (0..1), ángulo, largo]
+	var _spr := false          ## true = el rayo de abajo lo dibuja la animación (fxbolt)
 
 	func _ready() -> void:
 		z_index = -1
@@ -144,6 +145,17 @@ class Bolt extends SHazard:
 				hurt(damage, true)
 			if is_inside_tree():
 				GameFeel.dust(get_parent(), global_position, 6, Vector2.ZERO, 5.0, Vector2(r * 0.7, 6))
+				if Anim.ok("fxbolt"):
+					_spr = true
+					var an := Anim.new()
+					an.prefix = "fxbolt"
+					an.frames = [2, 3, 3, 4, 4, 5, 6, 7]
+					an.fps = 16.0
+					an.ground = true
+					an.k = r / 50.0
+					an.glow = Color(col, 0.25)
+					get_parent().add_child(an)
+					an.global_position = global_position + Vector2(0, 6)
 				if big:
 					var b := Burst.new()
 					b.col = col.lightened(0.3)
@@ -189,6 +201,14 @@ class Bolt extends SHazard:
 			var e := (t - warn) / 0.45
 			var a := clampf(1.0 - e, 0.0, 1.0)
 			var top := Vector2(randf_range(-6, 6), -540)
+			if _spr:
+				# con la animación: solo el tramo del cielo hasta lo alto del sprite, y el destello del piso
+				if e < 0.35:
+					var low := Vector2(0, -200.0 * r / 50.0)
+					U.zigzag(self, top, low, Color(col, a * 0.6), 10.0, _seed + int(t * 30.0), 18.0)
+					U.zigzag(self, top, low, Color(GREEN_HI, a), 5.0, _seed + int(t * 30.0), 18.0)
+				ellipse(Vector2.ZERO, Vector2(r * (1.1 + e), r * (0.55 + e * 0.5)), Color(col, 0.35 * a))
+				return
 			# rayo principal grueso + ramas
 			U.zigzag(self, top, Vector2.ZERO, Color(col, a * 0.6), 12.0 * a + 2.0, _seed + int(t * 30.0), 22.0)
 			U.zigzag(self, top, Vector2.ZERO, Color(GREEN_HI, a), 6.0, _seed + int(t * 30.0), 22.0)
@@ -478,6 +498,14 @@ class Selection extends SHazard:
 			for i in 34:
 				_chars.append([Vector2(randf_range(-size.x, size.x) * 0.45, randf_range(-size.y, size.y) * 0.45), Vector2(randf_range(-220, 220), randf_range(-280, -40)), "01{};=<>/"[randi() % 9], randf_range(-6.0, 6.0)])
 			if is_inside_tree():
+				if Anim.ok("fxdata"):
+					var an := Anim.new()
+					an.prefix = "fxdata"
+					an.k = 1.05
+					an.fps = 15.0
+					an.glow = Color(CURSOR, 0.25)
+					get_parent().add_child(an)
+					an.global_position = global_position
 				var b := Burst.new()
 				b.col = Color(0.6, 0.8, 1.0)
 				b.count = 22
@@ -1298,6 +1326,13 @@ class Crack extends SHazard:
 				get_parent().add_child(b)
 				b.global_position = at
 				GameFeel.dust(get_parent(), at, 3, Vector2.ZERO, 4.0, Vector2(18, 5))
+				if Anim.ok("fxfire"):
+					var an := Anim.new()
+					an.prefix = "fxfire"
+					an.k = 0.38
+					an.fps = 16.0
+					get_parent().add_child(an)
+					an.global_position = at + Vector2(0, -14)
 				var em := Embers.new()
 				em.area = Rect2(-20, -6, 40, 12)
 				em.emit_for = 0.6
@@ -1477,6 +1512,25 @@ class Flare extends SHazard:
 	func _draw() -> void:
 		var dir := Vector2.from_angle(_angle())
 		var side := dir.orthogonal()
+		_draw_beam(dir, side)
+		# el sol animado encima de la boca del rayo (carga: cuadros 0-3, disparo: 4-6)
+		var fr := -1
+		var k := 1.0
+		if t < charge:
+			fr = int(t * 8.0) % 4
+			k = 0.7 + 0.4 * clampf(t / charge, 0.0, 1.0)
+		elif t < charge + sweep:
+			fr = [4, 5, 6, 5][int(t * 10.0) % 4]
+			k = 1.15
+		if fr >= 0:
+			var tex: Texture2D = Spr.tex("boss_sudo_fxsun_%d" % fr)
+			if tex:
+				var sz := tex.get_size()
+				draw_set_transform(Vector2.ZERO, dir.angle(), Vector2(k, k))
+				draw_texture(tex, -sz * 0.5)
+				draw_set_transform(Vector2.ZERO)
+
+	func _draw_beam(dir: Vector2, side: Vector2) -> void:
 		if t < charge:
 			var k := t / charge
 			draw_line(Vector2.ZERO, dir * length, Color(SUN, 0.25 * absf(sin(t * 18.0))), width * k)
@@ -1705,10 +1759,11 @@ class AstraBall extends Node2D:
 	func _draw() -> void:
 		for i in 5:
 			draw_circle(Vector2.ZERO, r * (1.0 + 0.35 * i) + sin(t * 8.0 + i) * 3.0, Color(tint, 0.12))
-		var tex: Texture2D = Spr.tex("boss_sudo_projectiles_6")
+		var nm := "fxcosmic_2" if Spr.tex("boss_sudo_fxcosmic_2") else "projectiles_6"
+		var tex: Texture2D = Spr.tex("boss_sudo_" + nm)
 		if tex:
-			var k := r * 2.1 / tex.get_size().x
-			U.spr(self, "projectiles_6", Vector2.ZERO, k, t * 2.5)
+			var k := r * (2.6 if nm == "fxcosmic_2" else 2.1) / tex.get_size().x
+			U.spr(self, nm, Vector2.ZERO, k, t * 2.5)
 			for i in 10:
 				var a2 := t * 2.0 + TAU * i / 10.0
 				draw_circle(Vector2.from_angle(a2) * r * 1.6, 2.0, Color(1, 1, 1, 0.8))
@@ -2232,3 +2287,53 @@ class SpeedLines extends CanvasLayer:
 			var d := Vector2.from_angle(float(l[0]))
 			var r0: float = float(l[1]) - fmod(t * 900.0, 120.0)
 			_c.draw_line(c + d * r0, c + d * (r0 + float(l[2])), Color(col, a), float(l[3]))
+
+
+## Efecto animado por cuadros (hojas boss_sudo_fx*_0..7 de la ronda épica).
+## Cada cuadro trae su ancla en el centro del lienzo ("ground": abajo al centro).
+class Anim extends Node2D:
+	var prefix := "fxfire"
+	var frames: Array = [0, 1, 2, 3, 4, 5, 6, 7]
+	var fps := 14.0
+	var k := 1.0
+	var ground := false
+	var loop := false
+	var rot := 0.0
+	var tint := Color.WHITE
+	var follow: Node2D
+	var offset := Vector2.ZERO
+	var glow := Color(0, 0, 0, 0)     ## halo de color debajo (alfa 0 = sin halo)
+	var life := 0.0                   ## > 0: se borra a los `life` s (para los que van en bucle)
+	var t := 0.0
+
+	static func ok(pre: String) -> bool:
+		return Spr.tex("boss_sudo_%s_0" % pre) != null
+
+	func _ready() -> void:
+		z_index = 10
+
+	func _process(delta: float) -> void:
+		t += delta
+		if follow != null and is_instance_valid(follow):
+			global_position = follow.global_position + offset
+		if (not loop and int(t * fps) >= frames.size()) or (life > 0.0 and t > life):
+			queue_free()
+			return
+		queue_redraw()
+
+	func _draw() -> void:
+		var i := int(t * fps)
+		i = i % frames.size() if loop else mini(i, frames.size() - 1)
+		var tex: Texture2D = Spr.tex("boss_sudo_%s_%d" % [prefix, int(frames[i])])
+		if tex == null:
+			return
+		var sz := tex.get_size()
+		if glow.a > 0.0:
+			var gr := maxf(sz.x, sz.y) * 0.45 * k
+			var c := Vector2(0, -sz.y * 0.35 * k) if ground else Vector2.ZERO
+			for j in 3:
+				draw_circle(c, gr * (0.6 + 0.3 * j), Color(glow, glow.a * (0.5 - 0.15 * j)))
+		draw_set_transform(Vector2.ZERO, rot, Vector2(k, k))
+		draw_texture(tex, Vector2(-sz.x * 0.5, -sz.y if ground else -sz.y * 0.5), tint)
+		draw_set_transform(Vector2.ZERO)
+
