@@ -67,6 +67,10 @@ const IDLE_LONG_AFTER := 7.0      ## segundos quieto antes del reposo largo (si 
 @onready var hitbox: Area2D = $Hitbox
 @onready var camera: Camera2D = $Camera2D
 
+## Multijugador local: 0 = un jugador (responde a todo), 1/2 = jugador 1/2 con sus acciones p1_/p2_.
+var slot: int = 0
+## Personaje de este jugador (null = el de GameState.appearance).
+var appearance: CharacterAppearance = null
 var class_controller: Node
 var lock: Node   ## fijar objetivo (lock_on.gd)
 var character_id: String = ""
@@ -100,11 +104,15 @@ func _ready() -> void:
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	add_to_group("player")
 	z_index = 2  # por encima del tajo (SlashFx z 1) para que se vea el arma
-	if camera:
+	if appearance == null:
+		appearance = GameState.player_appearance(slot)
+	if slot >= 1:
+		add_to_group("player_%d" % slot)
+	if camera and slot <= 1:
 		camera.make_current()
 		camera.zoom = Vector2(1.25, 1.25)
 	_ensure_input_map()
-	character_id = GameState.appearance.get_preset_id()
+	character_id = appearance.get_preset_id()
 	anim.sprite_frames = CharacterSprites.build_frames(character_id)
 	anim.centered = true
 	anim.position = Vector2(0, FEET_Y) + CharacterSprites.FOOT_OFFSET
@@ -117,7 +125,7 @@ func _ready() -> void:
 	class_controller.setup(self, anim, hitbox)
 	class_controller.reach_scale = REACH_SCALE
 	class_controller.center_y = FEET_Y - CharacterSprites.CHARACTER_HEIGHT * 0.5
-	class_controller.set_class(GameState.appearance.class_id)
+	class_controller.set_class(appearance.class_id)
 	class_controller.attack_started.connect(_on_attack_started)
 	class_controller.attack_finished.connect(_on_attack_finished)
 	class_controller.guard_changed.connect(_on_guard_changed)
@@ -127,6 +135,22 @@ func _ready() -> void:
 	lock.call("setup", self)
 	_build_hud()
 	_play_idle()
+
+
+## Nombre de la acción para este jugador ("roll" -> "p2_roll").
+func act(action: String) -> String:
+	return InputSetup.pa(slot, action)
+
+
+func move_vec() -> Vector2:
+	return Input.get_vector(act("move_left"), act("move_right"), act("move_up"), act("move_down"))
+
+
+## Mando de este jugador (para el stick derecho del fijado). -1 = juega con teclado.
+func pad_device() -> int:
+	if slot <= 0 or not GameState.coop:
+		return 0
+	return int(GameState.devices[slot - 1])
 
 
 func _ensure_input_map() -> void:
@@ -190,7 +214,7 @@ func _physics_process(delta: float) -> void:
 		if _roll_left <= 0.0:
 			_end_roll()
 		return
-	var input_vec := Input.get_vector("move_left", "move_right", "move_up", "move_down")
+	var input_vec := move_vec()
 	if class_controller.busy and class_controller.mobile_speed > 0.0:
 		# acción que permite caminar (torbellino de cables de chain)
 		velocity = input_vec * SPEED * class_controller.mobile_speed * speed_mult
@@ -203,7 +227,7 @@ func _physics_process(delta: float) -> void:
 		velocity = class_controller.lunge_velocity
 	else:
 		# correr: solo mientras se mantiene el botón de rodar y hay dirección
-		if running and (not Input.is_action_pressed("roll") or input_vec.length() < 0.1):
+		if running and (not Input.is_action_pressed(act("roll")) or input_vec.length() < 0.1):
 			running = false
 			anim.speed_scale = 1.0
 			anim.rotation = 0.0
@@ -243,34 +267,34 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if _hurt_left > 0.0 or _knocked_down:
 		return
-	if event.is_action_pressed("roll"):
+	if event.is_action_pressed(act("roll")):
 		_try_roll()
 		get_viewport().set_input_as_handled()
 	elif rolling:
 		return
-	elif event.is_action_pressed("parry"):
+	elif event.is_action_pressed(act("parry")):
 		class_controller.set_facing(_action_vec())
 		class_controller.try_parry()
 		get_viewport().set_input_as_handled()
-	elif event.is_action_pressed("ultimate"):
+	elif event.is_action_pressed(act("ultimate")):
 		class_controller.set_facing(_action_vec())
 		class_controller.try_ultimate()
 		get_viewport().set_input_as_handled()
-	elif event.is_action_pressed("debug_fill_ultimate"):
+	elif event.is_action_pressed(act("debug_fill_ultimate")):
 		class_controller.debug_fill_meter()
 		get_viewport().set_input_as_handled()
-	elif event.is_action_pressed("action_primary"):
+	elif event.is_action_pressed(act("action_primary")):
 		class_controller.set_facing(_action_vec())
 		class_controller.try_primary()
 		get_viewport().set_input_as_handled()
-	elif event.is_action_pressed("action_secondary"):
+	elif event.is_action_pressed(act("action_secondary")):
 		class_controller.set_facing(_action_vec())
 		class_controller.try_secondary_pressed()
 		get_viewport().set_input_as_handled()
-	elif event.is_action_released("action_secondary"):
+	elif event.is_action_released(act("action_secondary")):
 		class_controller.try_secondary_released()
 		get_viewport().set_input_as_handled()
-	elif event.is_action_pressed("back"):
+	elif event.is_action_pressed(act("back")):
 		# Marcar el input antes de cambiar de escena: change_scene_to_file saca la escena
 		# del árbol al instante y get_viewport() pasaría a ser null.
 		get_viewport().set_input_as_handled()
@@ -295,7 +319,7 @@ func _try_roll() -> void:
 	# Rodar cancela el golpe en curso (y reinicia el combo).
 	if class_controller.busy:
 		class_controller.cancel_action()
-	var dir := Input.get_vector("move_left", "move_right", "move_up", "move_down")
+	var dir := move_vec()
 	if dir.length() < 0.1:
 		dir = facing_vec
 	else:
@@ -319,7 +343,7 @@ func _end_roll() -> void:
 	_lock_anim = false
 	_roll_cd = ROLL_COOLDOWN
 	velocity = Vector2.ZERO
-	var held := Input.is_action_pressed("roll") and Input.get_vector("move_left", "move_right", "move_up", "move_down").length() > 0.1
+	var held := Input.is_action_pressed(act("roll")) and move_vec().length() > 0.1
 	if held:
 		# sale de la rodada corriendo: conserva el impulso
 		running = true
@@ -565,7 +589,7 @@ func _on_attack_finished(_kind: String) -> void:
 	_lock_anim = false
 	anim.speed_scale = 1.0
 	# recuperación: se queda un instante en la pose final y se asienta (si no se mueve)
-	if Input.get_vector("move_left", "move_right", "move_up", "move_down").length() > 0.1:
+	if move_vec().length() > 0.1:
 		_recover_left = 0.0
 		_play_walk()
 		return

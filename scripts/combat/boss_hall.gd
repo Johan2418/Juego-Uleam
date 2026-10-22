@@ -6,6 +6,7 @@ extends Node2D
 ## Escena: scenes/combat/boss_hall.tscn. Se llega desde la puerta grande del campus y la arena vuelve aquí.
 
 const PlayerScene := preload("res://scenes/combat/player.tscn")
+const Coop := preload("res://scripts/coop.gd")
 const Arena := preload("res://scripts/combat/boss_arena.gd")
 const GameFeel := preload("res://scripts/combat/game_feel.gd")
 const StoneShader := preload("res://shaders/statue_stone.gdshader")
@@ -14,7 +15,7 @@ const ARENA_SCENE := "res://scenes/combat/boss_test.tscn"
 const MENU_SCENE := "res://scenes/character_creator.tscn"
 const HALL_SCENE := "res://scenes/combat/boss_hall.tscn"
 const LOCKER_POS := Vector2(-230, 236)
-const CAMPUS_SCENE := "res://scenes/main.tscn"
+const CAMPUS_SCENE := "res://scenes/training.tscn"
 const MUSIC := "res://assets/audio/hall/hall_ambient.ogg"
 const STATUE_DIR := "res://assets/sprites/statues/statue_%s.png"
 
@@ -39,6 +40,8 @@ const NEAR_Y := 70.0
 static var last_kind: String = ""
 
 var player: CharacterBody2D
+## Todos los jugadores (1 o 2 en multijugador).
+var players: Array = []
 var statues: Array = []          # Statue
 var _focus: Statue = null
 var _going := false
@@ -77,26 +80,24 @@ func _ready() -> void:
 	add_child(_locker)
 	_build_walls()
 	# jugador
-	player = PlayerScene.instantiate()
-	player.set("exit_scene", CAMPUS_SCENE)
 	var from_arena := last_kind != "" and ORDER.has(last_kind)
-	if from_arena:
-		player.position = Vector2(_statue_x(ORDER.find(last_kind)), FRONT_Y + 70)
-	else:
-		player.position = Vector2(0, HALL.end.y - 70)
-	add_child(player)
-	# sin vida ni medidores: aquí no se pelea
-	for c in player.get_children():
-		if c is CanvasLayer:
-			(c as CanvasLayer).visible = false
-	var cam := player.get_node_or_null("Camera2D") as Camera2D
-	if cam:
-		cam.zoom = Vector2.ONE
-		cam.limit_left = int(HALL.position.x)
-		cam.limit_right = int(HALL.end.x)
-		cam.limit_top = int(HALL.position.y)
-		cam.limit_bottom = int(HALL.end.y)
-		cam.reset_smoothing()
+	var spawn_at := Vector2(_statue_x(ORDER.find(last_kind)), FRONT_Y + 70) if from_arena else Vector2(0, HALL.end.y - 70)
+	players = Coop.spawn(self, spawn_at, CAMPUS_SCENE)
+	player = players[0]
+	for pl in players:
+		# sin vida ni medidores: aquí no se pelea
+		for c in pl.get_children():
+			if c is CanvasLayer:
+				(c as CanvasLayer).visible = false
+		var cam := pl.get_node_or_null("Camera2D") as Camera2D
+		if cam:
+			cam.zoom = Vector2.ONE
+			if players.size() == 1:
+				cam.limit_left = int(HALL.position.x)
+				cam.limit_right = int(HALL.end.x)
+				cam.limit_top = int(HALL.position.y)
+				cam.limit_bottom = int(HALL.end.y)
+			cam.reset_smoothing()
 	var vig := Vignette.new()
 	add_child(vig)
 	_ui = HallUi.new()
@@ -155,16 +156,21 @@ func _play_music() -> void:
 func _process(delta: float) -> void:
 	if player == null or not is_instance_valid(player):
 		return
-	var pf := player.global_position
-	# estatua más cercana delante del jugador
+	# estatua más cercana delante de algún jugador
 	var best: Statue = null
 	var best_d := INF
-	for st in statues:
-		var s: Statue = st
-		var dx := absf(pf.x - s.position.x)
-		if dx < NEAR_X and pf.y - FRONT_Y < NEAR_Y + 60.0 and dx < best_d:
-			best_d = dx
-			best = s
+	var pf := player.global_position
+	for pl in players:
+		if not is_instance_valid(pl):
+			continue
+		var pp: Vector2 = (pl as Node2D).global_position
+		for st in statues:
+			var s: Statue = st
+			var dx := absf(pp.x - s.position.x)
+			if dx < NEAR_X and pp.y - FRONT_Y < NEAR_Y + 60.0 and dx < best_d:
+				best_d = dx
+				best = s
+				pf = pp
 	if best != _focus and not _going:
 		if _focus:
 			_focus.focused = false
@@ -174,20 +180,30 @@ func _process(delta: float) -> void:
 			_ui.show_statue(_focus)
 		else:
 			_ui.hide_statue()
-	_exit_near = absf(pf.x) < 90.0 and pf.y > HALL.end.y - 70.0
-	_locker_near = pf.distance_to(LOCKER_POS) < 85.0 and not _exit_near
+	_exit_near = false
+	_locker_near = false
+	for pl in players:
+		if is_instance_valid(pl):
+			var pp2: Vector2 = (pl as Node2D).global_position
+			_exit_near = _exit_near or (absf(pp2.x) < 90.0 and pp2.y > HALL.end.y - 70.0)
+			_locker_near = _locker_near or pp2.distance_to(LOCKER_POS) < 85.0
+	_locker_near = _locker_near and not _exit_near
 	_locker.near = _locker_near and not _going
 	_ui.set_exit_prompt(_exit_near and not _going)
-	# el jugador queda en penumbra salvo bajo los haces de luz
-	var light := 0.5
-	for st in statues:
-		var s2: Statue = st
-		var k := clampf(1.0 - absf(pf.x - s2.position.x) / 190.0, 0.0, 1.0) * clampf(1.0 - (pf.y - FRONT_Y) / 330.0, 0.0, 1.0)
-		light = maxf(light, 0.5 + 0.5 * k * (0.6 + 0.4 * s2.glow))
-	if _exit_near:
-		light = maxf(light, 0.8)
-	var c := Color(light * 0.95, light * 0.95, light)
-	player.modulate = player.modulate.lerp(c, minf(1.0, delta * 6.0))
+	# los jugadores quedan en penumbra salvo bajo los haces de luz
+	for pl in players:
+		if not is_instance_valid(pl):
+			continue
+		var pq: Vector2 = (pl as Node2D).global_position
+		var light := 0.5
+		for st in statues:
+			var s2: Statue = st
+			var k := clampf(1.0 - absf(pq.x - s2.position.x) / 190.0, 0.0, 1.0) * clampf(1.0 - (pq.y - FRONT_Y) / 330.0, 0.0, 1.0)
+			light = maxf(light, 0.5 + 0.5 * k * (0.6 + 0.4 * s2.glow))
+		if absf(pq.x) < 90.0 and pq.y > HALL.end.y - 70.0:
+			light = maxf(light, 0.8)
+		var c := Color(light * 0.95, light * 0.95, light)
+		(pl as Node2D).modulate = (pl as Node2D).modulate.lerp(c, minf(1.0, delta * 6.0))
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -209,9 +225,11 @@ func _unhandled_input(event: InputEvent) -> void:
 
 func _challenge(st: Statue) -> void:
 	_going = true
-	player.set_physics_process(false)
-	player.set_process_unhandled_input(false)
-	player.velocity = Vector2.ZERO
+	for pl in players:
+		if is_instance_valid(pl):
+			pl.set_physics_process(false)
+			pl.set_process_unhandled_input(false)
+			pl.velocity = Vector2.ZERO
 	_ui.set_exit_prompt(false)
 	st.awaken()
 	GameFeel.dust(self, st.global_position + Vector2(0, 30), 14, Vector2.ZERO, 6.0, Vector2(110, 10))
@@ -615,7 +633,7 @@ class HallUi extends CanvasLayer:
 		_exit.visible = false
 		add_child(_exit)
 		var hint := Label.new()
-		hint.text = "Acércate a una estatua y pulsa %s para desafiarla  ·  casillero de la entrada: clase y técnicas  ·  %s volver al campus" % [GameState.btn("interact"), GameState.btn("back")]
+		hint.text = "Acércate a una estatua y pulsa %s para desafiarla  ·  casillero de la entrada: clase y técnicas  ·  %s volver al entrenamiento" % [GameState.btn("interact"), GameState.btn("back")]
 		hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		hint.size = Vector2(1280, 20)
 		hint.position = Vector2(0, 694)
@@ -682,7 +700,7 @@ class HallUi extends CanvasLayer:
 
 	func set_exit_prompt(on: bool) -> void:
 		_exit.visible = on
-		_exit.text = "%s  volver al campus" % GameState.btn("interact")
+		_exit.text = "%s  volver al entrenamiento" % GameState.btn("interact")
 
 
 ## Línea ornamental con un rombo al centro (estilo grabado).

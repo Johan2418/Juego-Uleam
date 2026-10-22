@@ -94,6 +94,63 @@ static func ensure() -> void:
 		InputMap.action_set_deadzone(s[0], MOVE_DEADZONE)
 
 
+## Multijugador local: acciones propias de cada jugador ("p1_move_left", "p2_parry"...).
+## device = -1 teclado (+ ratón), >= 0 índice del mando. Las acciones genéricas siguen
+## respondiendo a cualquier dispositivo (menús, puertas, salón).
+const PLAYER_ACTIONS := ["move_left", "move_right", "move_up", "move_down", "action_primary", "action_secondary",
+	"parry", "roll", "ultimate", "interact", "back", "lock_on", "lock_next", "debug_fill_ultimate"]
+
+
+static func pa(slot: int, action: String) -> String:
+	return action if slot <= 0 else "p%d_%s" % [slot, action]
+
+
+static func build_player(slot: int, device: int) -> void:
+	for a in ACTIONS:
+		var action: String = a[0]
+		if not PLAYER_ACTIONS.has(action):
+			continue
+		var name := pa(slot, action)
+		if InputMap.has_action(name):
+			InputMap.erase_action(name)
+		InputMap.add_action(name)
+		if device < 0:
+			for k in a[1]:
+				var ev := InputEventKey.new()
+				ev.keycode = k as Key
+				ev.physical_keycode = k as Key
+				InputMap.action_add_event(name, ev)
+		else:
+			for b in a[2]:
+				var jb := InputEventJoypadButton.new()
+				jb.device = device
+				jb.button_index = b as JoyButton
+				InputMap.action_add_event(name, jb)
+	if device < 0:
+		for pair in [["action_primary", MOUSE_BUTTON_LEFT], ["action_secondary", MOUSE_BUTTON_RIGHT], ["lock_on", MOUSE_BUTTON_MIDDLE]]:
+			var mb := InputEventMouseButton.new()
+			mb.button_index = pair[1]
+			InputMap.action_add_event(pa(slot, pair[0]), mb)
+	else:
+		for st in STICK:
+			var jm := InputEventJoypadMotion.new()
+			jm.device = device
+			jm.axis = st[1] as JoyAxis
+			jm.axis_value = st[2]
+			InputMap.action_add_event(pa(slot, st[0]), jm)
+	for d in ["move_left", "move_right", "move_up", "move_down"]:
+		InputMap.action_set_deadzone(pa(slot, d), MOVE_DEADZONE)
+
+
+## Dispositivo de un evento: -1 teclado/ratón, >= 0 mando, -9 otro (toque, etc.).
+static func event_device(ev: InputEvent) -> int:
+	if ev is InputEventKey or ev is InputEventMouseButton:
+		return -1
+	if ev is InputEventJoypadButton or ev is InputEventJoypadMotion:
+		return ev.device
+	return -9
+
+
 ## Nombre del botón para mostrar en pantalla según lo último que se tocó (teclado o mando).
 static func label(action: String, pad: bool) -> String:
 	var d: Dictionary = PAD_LABELS if pad else KEY_LABELS

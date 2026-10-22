@@ -69,7 +69,8 @@ func _process(_delta: float) -> void:
 	elif target != null and not is_instance_valid(target):
 		release()
 	# stick derecho: cambiar de objetivo a ese lado
-	var rx := Input.get_joy_axis(0, JOY_AXIS_RIGHT_X)
+	var dev: int = int(player.call("pad_device")) if player.has_method("pad_device") else 0
+	var rx := Input.get_joy_axis(dev, JOY_AXIS_RIGHT_X) if dev >= 0 else 0.0
 	if absf(rx) < 0.3:
 		_stick_ready = true
 	elif absf(rx) > 0.7 and _stick_ready and active():
@@ -81,10 +82,15 @@ func _process(_delta: float) -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if player == null or not player.is_processing_unhandled_input():
 		return
-	if event.is_action_pressed("lock_on"):
+	var a_on := "lock_on"
+	var a_next := "lock_next"
+	if player.has_method("act"):
+		a_on = player.call("act", a_on)
+		a_next = player.call("act", a_next)
+	if event.is_action_pressed(a_on):
 		toggle()
 		get_viewport().set_input_as_handled()
-	elif event.is_action_pressed("lock_next"):
+	elif event.is_action_pressed(a_next):
 		if active():
 			cycle()
 		else:

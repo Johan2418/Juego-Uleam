@@ -12,7 +12,7 @@ config_version=5
 
 config/name="Prototipo Campus"
 config/description="Prototipo top-down estilo Zelda. Campus universitario con clases de combate."
-run/main_scene="res://scenes/character_creator.tscn"
+run/main_scene="res://scenes/title.tscn"
 config/features=PackedStringArray("4.6", "Forward Plus")
 config/icon="res://icon.svg"
 

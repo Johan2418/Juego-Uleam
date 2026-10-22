@@ -74,9 +74,20 @@ func _process(delta: float) -> void:
 		modulate = Color(1.5, 1.4, 0.5)
 
 
+signal got_hit(amount: int, from: Vector2)
+
+
 func _find_player() -> Node2D:
+	# el jugador más cercano (en multijugador ataca al que tenga al lado)
+	var best: Node2D = null
+	var bd := INF
 	for n in get_tree().get_nodes_in_group("player"):
-		return n as Node2D
+		var d := (n as Node2D).global_position.distance_to(global_position)
+		if d < bd:
+			bd = d
+			best = n as Node2D
+	if best:
+		return best
 	var p := get_parent().get_node_or_null("Player")
 	return p as Node2D
 
@@ -114,6 +125,7 @@ func _do_attack(p: Node2D) -> void:
 
 func take_hit(amount: int, from: Vector2) -> void:
 	hp = maxi(0, hp - amount)
+	got_hit.emit(amount, from)
 	_flash = 0.35
 	_telegraph = 0.0  # un golpe interrumpe su ataque
 	_attack_cd = maxf(_attack_cd, 0.8)

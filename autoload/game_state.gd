@@ -21,6 +21,15 @@ var last_won: String = ""
 ## Las técnicas salen de scripts/combat/techniques.gd y se desbloquean al vencer a su boss.
 var loadout: Dictionary = {}
 
+## Multijugador local (misma pantalla; se divide si se alejan). Lo activa la portada (2 JUGADORES).
+var coop: bool = false
+## Personaje del jugador 2.
+var appearance2: CharacterAppearance = CharacterAppearance.new()
+## Dispositivo de cada jugador: -1 teclado, >= 0 mando. En 1 jugador no se usa (todo responde).
+var devices: Array = [-1, 0]
+## Ya terminó la sala de entrenamiento alguna vez (la puerta al salón queda abierta).
+var training_done: bool = false
+
 
 func _ready() -> void:
 	InputSetup.ensure()
@@ -78,6 +87,27 @@ func load_appearance() -> void:
 	has_confirmed = bool(cfg.get_value(SAVE_SECTION, "has_confirmed", false))
 
 
+## Apariencia del jugador `slot` (0/1 = jugador 1, 2 = jugador 2).
+func player_appearance(slot: int) -> CharacterAppearance:
+	return appearance2 if slot == 2 else appearance
+
+
+## Arma las acciones p1_/p2_ con los dispositivos elegidos.
+func setup_coop(on: bool, dev1: int = -1, dev2: int = 0) -> void:
+	coop = on
+	devices = [dev1, dev2]
+	if on:
+		InputSetup.build_player(1, dev1)
+		InputSetup.build_player(2, dev2)
+
+
+## Botón de una acción para el jugador según su dispositivo (o el último usado en 1 jugador).
+func btn_for(slot: int, action: String) -> String:
+	if not coop or slot <= 0:
+		return btn(action)
+	return InputSetup.label(action, int(devices[slot - 1]) >= 0)
+
+
 func get_summary_text() -> String:
 	return "\n".join(appearance.summary_lines())
 
@@ -112,6 +142,7 @@ func save_progress() -> void:
 		var lo: Dictionary = loadout[c]
 		for slot in lo.keys():
 			cfg.set_value("loadout", "%s.%s" % [c, slot], str(lo[slot]))
+	cfg.set_value("misc", "training_done", training_done)
 	var err := cfg.save(PROGRESS_PATH)
 	if err != OK:
 		push_warning("GameState: no se pudo guardar el progreso (%s)" % error_string(err))
@@ -123,6 +154,7 @@ func load_progress() -> void:
 	var cfg := ConfigFile.new()
 	if cfg.load(PROGRESS_PATH) != OK:
 		return
+	training_done = bool(cfg.get_value("misc", "training_done", false))
 	if cfg.has_section("loadout"):
 		for key in cfg.get_section_keys("loadout"):
 			var parts2 := str(key).split(".")

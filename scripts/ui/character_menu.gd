@@ -13,7 +13,7 @@ extends Control
 const Tech := preload("res://scripts/combat/techniques.gd")
 const Arena := preload("res://scripts/combat/boss_arena.gd")
 const PORTRAIT_DIR := "res://assets/sprites/portraits/%s_%s.png"
-const CAMPUS_SCENE := "res://scenes/main.tscn"
+const CAMPUS_SCENE := "res://scenes/training.tscn"
 
 ## A dónde vuelve al confirmar ("" = al campus). El salón lo pone antes de abrir el menú.
 static var return_scene: String = ""

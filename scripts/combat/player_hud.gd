@@ -15,7 +15,8 @@ func _ready() -> void:
 	layer = 5
 	_draw_node = HudPanel.new()
 	_draw_node.player = player
-	_draw_node.position = Vector2(14, 720 - 118)
+	var sl: int = int(player.get("slot")) if player.get("slot") != null else 0
+	_draw_node.position = Vector2(1280 - 14 - HudPanel.W, 720 - 118) if sl == 2 else Vector2(14, 720 - 118)
 	add_child(_draw_node)
 
 
@@ -46,7 +47,9 @@ class HudPanel extends Control:
 		size = Vector2(W, H)
 		mouse_filter = Control.MOUSE_FILTER_IGNORE
 		texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-		var app: Variant = GameState.get("appearance")
+		var app: Variant = player.get("appearance")
+		if app == null:
+			app = GameState.get("appearance")
 		if app != null:
 			_name = str(app.get("student_name"))
 			var cid: String = str(app.get("class_id"))
@@ -60,6 +63,10 @@ class HudPanel extends Control:
 				_combo = step + 1
 				_combo_t = 1.2)
 			cc.connect("parried", func(_from: Vector2) -> void: _parry = 1.0)
+
+	func _btn(action: String) -> String:
+		var sl: Variant = player.get("slot")
+		return GameState.btn_for(int(sl) if sl != null else 0, action)
 
 	## Recorta la cabeza del primer cuadro de reposo mirando abajo.
 	func _find_portrait() -> void:
@@ -147,7 +154,10 @@ class HudPanel extends Control:
 		Kit.K.text(self, badge.position + Vector2(0, 12), _class.to_upper(), 11, Color(1, 0.85, 0.4), Color(0, 0, 0, 0), HORIZONTAL_ALIGNMENT_CENTER, badge.size.x)
 		# nombre
 		var x0 := 106.0
-		Kit.K.text(self, Vector2(x0, 21), _name, 15, Color.WHITE)
+		var tag := ""
+		if GameState.coop and player.get("slot") != null and int(player.get("slot")) >= 1:
+			tag = "P%d  " % int(player.get("slot"))
+		Kit.K.text(self, Vector2(x0, 21), tag + _name, 15, Color(1.0, 0.85, 0.3) if tag == "P2  " else (Color(0.5, 0.85, 1.0) if tag != "" else Color.WHITE))
 		# combo
 		if _combo_t > 0.0 and _combo > 0:
 			for i in 3:
@@ -160,7 +170,7 @@ class HudPanel extends Control:
 		var cc2: Node = player.get("class_controller") if player else null
 		if cc2 and float(cc2.call("counter_window_left")) > 0.0:
 			var pulse := 0.6 + 0.4 * sin(t * 30.0)
-			var ctext := "¡%s  CONTRAATAQUE!" % GameState.btn("action_primary")
+			var ctext := "¡%s  CONTRAATAQUE!" % _btn("action_primary")
 			var cw := Kit.K.text_w(ctext, 17) + 20.0
 			draw_rect(Rect2(0, -34, cw, 28), Color(0, 0, 0, 0.8))
 			draw_rect(Rect2(0, -34, cw, 28), Color(1.0, 0.85, 0.3, pulse), false, 2.0)
@@ -204,7 +214,7 @@ class HudPanel extends Control:
 			draw_arc(kc, 19, 0, TAU, 32, Color(0.6, 0.9, 1.0), 4.0)
 			if _k_ready_pop > 0.0:
 				draw_arc(kc, 19 + 10 * (1.0 - _k_ready_pop), 0, TAU, 32, Color(0.7, 0.95, 1.0, _k_ready_pop), 3.0)
-		Kit.K.text(self, kc + Vector2(-20, 6), GameState.btn("action_secondary"), 18, Color.WHITE if kfrac >= 1.0 else Color(0.6, 0.65, 0.75), Color(0, 0, 0, 0.9), HORIZONTAL_ALIGNMENT_CENTER, 40)
+		Kit.K.text(self, kc + Vector2(-20, 6), _btn("action_secondary"), 18, Color.WHITE if kfrac >= 1.0 else Color(0.6, 0.65, 0.75), Color(0, 0, 0, 0.9), HORIZONTAL_ALIGNMENT_CENTER, 40)
 		# ultimate
 		var ur := Rect2(x0, 82, W - x0 - 70, 14)
 		Kit.K.inset(self, ur, Color(0.06, 0.05, 0.08))
@@ -224,7 +234,7 @@ class HudPanel extends Control:
 		for i in range(1, 4):
 			var x := inner.position.x + inner.size.x * i / 4.0
 			draw_rect(Rect2(x - 1, inner.position.y, 2, inner.size.y), Color(0, 0, 0, 0.6))
-		var ul := "ULTIMATE" if not ready else "¡%s! ULTIMATE" % GameState.btn("ultimate").to_upper()
+		var ul := "ULTIMATE" if not ready else "¡%s! ULTIMATE" % _btn("ultimate").to_upper()
 		Kit.K.text(self, Vector2(inner.position.x + 4, inner.end.y - 1), ul, 11, Color.WHITE if not ready else Color(1, 1, 0.7))
 		if _ult_pop > 0.0:
 			draw_rect(ur.grow(6.0 * (1.0 - _ult_pop)), Color(1, 0.9, 0.4, _ult_pop), false, 2.0)

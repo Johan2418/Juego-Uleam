@@ -142,6 +142,9 @@ func _ready() -> void:
 	_build_walls()
 	player = PlayerScene.instantiate()
 	player.position = Vector2(0, 230)
+	# multijugador: los bosses todavía son de 1 jugador; el jugador 1 pelea con sus controles
+	if GameState.coop:
+		player.set("slot", 1)
 	add_child(player)
 	player.set("exit_scene", CAMPUS_SCENE)
 	var cam := player.get_node_or_null("Camera2D") as Camera2D
