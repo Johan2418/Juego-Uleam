@@ -17,7 +17,7 @@ PERSON = ("The boss is called SUDO, the leader of the university AI club: a frie
           "chibi caricature with a slightly big head, NOT realistic. "
           "Clothes exactly like the photo: plain BLACK crew-neck T-shirt with a TINY white print on the left chest (just 2 small white lines, no readable text), "
           "slim LIGHT CREAM / off-white pants, BLACK low sneakers with WHITE soles, a black SMARTWATCH on his LEFT wrist "
-          "(the arm on the RIGHT side of the image, as in the photo). In that SAME hand (on the RIGHT side of the image) he holds a small black "
+          "(the arm on the RIGHT side of the image, as in the photo). In his OTHER hand (the hand on the LEFT side of the image) he holds a small black "
           "presentation CLICKER (slide remote) with a tiny red light. ")
 STYLE2 = ("STYLE RULE: copy ONLY the pixel size, outline thickness, proportions style and shading of the character in the second attached image; "
           "do NOT copy that character's face, hair, clothes or colors (it is a different person). ")
@@ -51,20 +51,20 @@ TASKS = [
   "Poses 5-8: WALKING loop toward the viewer (left foot forward, passing, right foot forward, passing), arms swinging gently. " + NOTEXT, ""),
  ("B", "boss_sudo_cast8.png", FULL, PHOTO,
   STYLE + SAME + POSES8 +
-  "Poses 1-2: raising the clicker hand (RIGHT side of the image) high above the head (anticipation, then fully up). "
+  "Poses 1-2: raising the clicker hand (LEFT side of the image) high above the head (anticipation, then fully up). "
   "Poses 3-4: pointing the clicker straight forward at the viewer like pressing next slide (arm extended). "
   "Poses 5-6: both arms spread wide open to the sides like presenting something big. "
   "Poses 7-8: BOTH arms raised high above the head, palms up, like summoning something huge in the sky (empty hands except the clicker). " + NOTEXT, ""),
  ("B", "boss_sudo_moves8.png", FULL, PHOTO,
   STYLE + SAME + POSES8 +
   "Pose 1: crouching and leaning forward ready to dash. Pose 2: dashing to the RIGHT, body leaning strongly, one leg back. "
-  "Pose 3: stomping one foot hard on the floor, fists down. Pose 4: waving hello with the free hand (LEFT side of the image), smiling. "
-  "Pose 5: presenting gesture, open free palm (LEFT side of the image) to the side. Pose 6: thinking, free hand on the beard. "
+  "Pose 3: stomping one foot hard on the floor, fists down. Pose 4: waving hello with the watch hand (RIGHT side of the image), smiling. "
+  "Pose 5: presenting gesture, open palm of the watch hand (RIGHT side of the image) to the side. Pose 6: thinking, watch hand on the beard. "
   "Pose 7: laughing confidently, hands on hips. Pose 8: standing straight, neutral (height reference). " + NOTEXT, ""),
  ("B", "boss_sudo_hurt8.png", FULL, PHOTO,
   STYLE + SAME + POSES8 +
   "Poses 1-2: hurt flinch, leaning back, eyes squeezed shut. "
-  "Poses 3-4: dizzy and confused, free hand on his head, eyes as swirls (overloaded, CONTEXT OVERFLOW). "
+  "Poses 3-4: dizzy and confused, watch hand on his head, eyes as swirls (overloaded, CONTEXT OVERFLOW). "
   "Poses 5-6: down on one knee, tired, clicker hanging from the hand. "
   "Poses 7-8: standing with arms slightly open, head tilted up, body starting to turn pale and dissolve into tiny white and violet star pixels "
   "at the edges (his defeat: fading into stardust). " + NOTEXT, ""),
@@ -158,7 +158,7 @@ def main():
          "- Fondo menta liso #A0EFA5, sin sombra. Pixel art duro, sin difuminado.",
          "- SIN TEXTO NI LOGOS: nada de marcas (Supabase, Cursor, Clerk, Grok, OpenAI...). La camiseta solo lleva 2 rayitas blancas; el código escribe \"CLUB IA\".",
          "- La pantalla del proyector va VACÍA: las diapositivas las dibuja el código.",
-         "- En las hojas de poses: reloj y clicker siempre en su mano IZQUIERDA (el brazo del lado DERECHO de la imagen, como en la foto); misma escala en las 8 poses.",
+         "- En las hojas de poses: como en la hoja A aprobada: clicker en la mano del lado IZQUIERDO de la imagen y reloj en la muñeca del lado DERECHO; misma escala en las 8 poses.",
          "- Si ChatGPT falla 2 veces (no se parece, cambia ropa, pone texto), probar Gemini. Si falla otra vez, `[!]` con nota.\n",
          "## Guardado",
          "`referencias_animacion/_entregas_runway/bosses/<nombre exacto>.png` (arenas en `_entregas_runway/arenas/`). Marca `[x]` al guardar; `[!]` con nota si falla. "
