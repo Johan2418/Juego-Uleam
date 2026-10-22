@@ -123,13 +123,17 @@ class Bolt extends SHazard:
 	var damage := 2
 	var harmless := false
 	var col := GREEN
+	var big := true            ## false = sin destello ni quemadura (rayitos de decoración)
 	var t := 0.0
 	var _hit := false
 	var _seed := 0
+	var _branches: Array = []  # [punto de salida (0..1), ángulo, largo]
 
 	func _ready() -> void:
 		z_index = -1
 		_seed = randi()
+		for i in 3:
+			_branches.append([randf_range(0.25, 0.75), randf_range(-1.0, 1.0), randf_range(60.0, 140.0)])
 
 	func _process(delta: float) -> void:
 		t += delta
@@ -139,8 +143,27 @@ class Bolt extends SHazard:
 			if not harmless and feet_in(global_position, r):
 				hurt(damage, true)
 			if is_inside_tree():
-				GameFeel.dust(get_parent(), global_position, 5, Vector2.ZERO, 4.0, Vector2(r * 0.6, 6))
-		if t >= warn + 0.4:
+				GameFeel.dust(get_parent(), global_position, 6, Vector2.ZERO, 5.0, Vector2(r * 0.7, 6))
+				if big:
+					var b := Burst.new()
+					b.col = col.lightened(0.3)
+					b.count = 16
+					get_parent().add_child(b)
+					b.global_position = global_position
+					var sc := Scorch.new()
+					sc.r = r * 0.9
+					sc.col = col
+					get_parent().add_child(sc)
+					sc.global_position = global_position
+					var rg := Ring.new()
+					rg.col = col
+					rg.max_r = r * 2.4
+					rg.life = 0.35
+					get_parent().add_child(rg)
+					rg.global_position = global_position
+					if is_instance_valid(boss) and boss.has_method("_shake"):
+						boss.call("_shake", 4.0, 0.16)
+		if t >= warn + 0.45:
 			queue_free()
 		queue_redraw()
 
@@ -148,18 +171,36 @@ class Bolt extends SHazard:
 		if t < warn:
 			var k := t / warn
 			var blink := 0.6 + 0.4 * absf(sin(t * 16.0))
+			# nube cargándose arriba
+			for i in 4:
+				ellipse(Vector2(sin(t * 3.0 + i) * 18.0, -440.0 + i * 6.0), Vector2(40.0 + 30.0 * k + i * 10.0, 14.0 + 6.0 * k), Color(0.05, 0.12, 0.08, 0.35 * k))
+			if fmod(t * 9.0 + float(_seed % 7), 3.0) < 0.25 and k > 0.4:
+				U.zigzag(self, Vector2(-30, -440), Vector2(30, -430), Color(GREEN_HI, 0.6), 1.5, _seed + int(t * 20.0), 8.0)
+			# columna de luz y círculo con código girando
+			draw_rect(Rect2(-r * 0.15 * k, -430, r * 0.3 * k, 430), Color(col, 0.08 * k))
 			ellipse(Vector2.ZERO, Vector2(r, r * 0.5), Color(col, 0.12 * blink))
 			ellipse(Vector2.ZERO, Vector2(r * k, r * k * 0.5), Color(col, 0.3))
 			ellipse_line(Vector2.ZERO, Vector2(r, r * 0.5), Color(col.lightened(0.3), 0.85 * blink), 2.0)
-			# chispa que se carga arriba
-			draw_circle(Vector2(0, -420), 4.0 + 6.0 * k, Color(col, 0.5 * k))
+			var glyphs := "{}<>01;=/"
+			for i in 8:
+				var ang := TAU * i / 8.0 + t * 2.5
+				U.text(self, Vector2(cos(ang) * r * 0.78 - 4, sin(ang) * r * 0.39 + 4), glyphs[(i + _seed) % glyphs.length()], 11, Color(GREEN_HI, 0.7 * k), -1, HORIZONTAL_ALIGNMENT_LEFT, 0)
 		else:
-			var a := clampf(1.0 - (t - warn) / 0.4, 0.0, 1.0)
-			U.zigzag(self, Vector2(randf_range(-6, 6), -520), Vector2.ZERO, Color(GREEN_HI, a), 5.0, _seed + int(t * 30.0))
+			var e := (t - warn) / 0.45
+			var a := clampf(1.0 - e, 0.0, 1.0)
+			var top := Vector2(randf_range(-6, 6), -540)
+			# rayo principal grueso + ramas
+			U.zigzag(self, top, Vector2.ZERO, Color(col, a * 0.6), 12.0 * a + 2.0, _seed + int(t * 30.0), 22.0)
+			U.zigzag(self, top, Vector2.ZERO, Color(GREEN_HI, a), 6.0, _seed + int(t * 30.0), 22.0)
+			for br in _branches:
+				var from := top.lerp(Vector2.ZERO, float(br[0]))
+				var to := from + Vector2.from_angle(PI * 0.5 + float(br[1])) * float(br[2])
+				U.zigzag(self, from, to, Color(GREEN_HI, a * 0.8), 2.5, _seed + 3 + int(t * 40.0), 10.0)
 			if col == GREEN:
 				U.spr_feet(self, "projectiles_1", Vector2(0, 6), 1.0, Color(1, 1, 1, a))
-			ellipse(Vector2.ZERO, Vector2(r * 1.1, r * 0.55), Color(col, 0.5 * a))
-			ellipse(Vector2.ZERO, Vector2(r * 0.5, r * 0.25), Color(1, 1, 1, 0.8 * a))
+			ellipse(Vector2.ZERO, Vector2(r * (1.1 + e), r * (0.55 + e * 0.5)), Color(col, 0.5 * a))
+			ellipse(Vector2.ZERO, Vector2(r * 0.6, r * 0.3), Color(1, 1, 1, 0.9 * a))
+			draw_circle(Vector2(0, -10), 26.0 * a, Color(1, 1, 1, 0.5 * a))
 
 
 ## Realtime: 3 "tablas" verdes unidas por láseres que giran. Rodar a través del láser.
@@ -212,9 +253,16 @@ class Realtime extends SHazard:
 				draw_dashed_line(a, b, Color(GREEN, 0.55 * absf(sin(t * 14.0))), 2.0, 10.0)
 			else:
 				var w := 6.0 + 2.0 * sin(t * 30.0)
+				draw_line(a, b, Color(GREEN, 0.22 * fade), w * 4.0)
 				draw_line(a, b, Color(GREEN, 0.35 * fade), w * 2.4)
 				draw_line(a, b, Color(GREEN_HI, 0.95 * fade), w)
 				draw_line(a, b, Color(1, 1, 1, fade), 2.0)
+				# arcos eléctricos que se retuercen alrededor del láser
+				U.zigzag(self, a, b, Color(GREEN_HI, 0.55 * fade), 1.5, int(t * 24.0) + i * 13, 14.0)
+				# pulsos de datos viajando entre las tablas
+				for j in 3:
+					var q := fmod(t * 1.6 + j / 3.0, 1.0)
+					draw_circle(a.lerp(b, q), 5.0, Color(1, 1, 1, 0.9 * fade))
 		for p in pts:
 			_cube(p, fade)
 
@@ -427,8 +475,23 @@ class Selection extends SHazard:
 				var r := Rect2(global_position - size * 0.5, size)
 				if r.has_point(player_feet()):
 					hurt(2, true)
-			for i in 18:
-				_chars.append([Vector2(randf_range(-size.x, size.x) * 0.45, randf_range(-size.y, size.y) * 0.45), Vector2(randf_range(-90, 90), randf_range(-160, -40)), "01{};=<>/"[randi() % 9]])
+			for i in 34:
+				_chars.append([Vector2(randf_range(-size.x, size.x) * 0.45, randf_range(-size.y, size.y) * 0.45), Vector2(randf_range(-220, 220), randf_range(-280, -40)), "01{};=<>/"[randi() % 9], randf_range(-6.0, 6.0)])
+			if is_inside_tree():
+				var b := Burst.new()
+				b.col = Color(0.6, 0.8, 1.0)
+				b.count = 22
+				b.speed = 380.0
+				get_parent().add_child(b)
+				b.global_position = global_position
+				var rg := Ring.new()
+				rg.col = CURSOR
+				rg.max_r = 200.0
+				rg.life = 0.4
+				get_parent().add_child(rg)
+				rg.global_position = global_position + Vector2(0, 20)
+				if is_instance_valid(boss) and boss.has_method("_shake"):
+					boss.call("_shake", 5.0, 0.2)
 		if t > follow + lock + 0.5:
 			queue_free()
 		queue_redraw()
@@ -443,15 +506,32 @@ class Selection extends SHazard:
 			draw_dashed_line(Vector2(r.end.x, r.position.y), r.end, Color(CURSOR, 0.9), 2.0, 8.0)
 			draw_dashed_line(r.end, Vector2(r.position.x, r.end.y), Color(CURSOR, 0.9), 2.0, 8.0)
 			draw_dashed_line(Vector2(r.position.x, r.end.y), r.position, Color(CURSOR, 0.9), 2.0, 8.0)
+			# esquinas de mira que se cierran
+			var c := 14.0 + (1.0 - clampf((t - follow) / lock, 0.0, 1.0)) * 18.0 if locked else 14.0
+			for q in [r.position, Vector2(r.end.x, r.position.y), r.end, Vector2(r.position.x, r.end.y)]:
+				var sx := -1.0 if q.x > 0.0 else 1.0
+				var sy := -1.0 if q.y > 0.0 else 1.0
+				var qq: Vector2 = q - Vector2(sx, sy) * (c - 14.0)
+				draw_line(qq, qq + Vector2(sx * c, 0), Color(1, 1, 1, 0.95), 3.0)
+				draw_line(qq, qq + Vector2(0, sy * c), Color(1, 1, 1, 0.95), 3.0)
+			if locked:
+				# líneas de código reescribiéndose dentro
+				for i in 5:
+					var y := r.position.y + 14.0 + i * 18.0
+					var w := fmod(t * 300.0 + i * 57.0, r.size.x - 20.0)
+					draw_rect(Rect2(r.position.x + 10.0, y, w, 6), Color(0.6, 0.8, 1.0, 0.5))
 			draw_rect(Rect2(r.position + Vector2(0, -22), Vector2(150, 20)), Color(0.06, 0.07, 0.12, 0.9))
 			U.text(self, r.position + Vector2(6, -7), "Cmd+K  reescribiendo..." if locked else "Cmd+K", 12, Color(0.85, 0.9, 1))
 		else:
 			var k := clampf((t - follow - lock) / 0.5, 0.0, 1.0)
-			draw_rect(r.grow(8.0 * k), Color(1, 1, 1, 0.7 * (1.0 - k)))
-			draw_rect(r, Color(CURSOR, 0.5 * (1.0 - k)))
+			draw_rect(r.grow(30.0 * k), Color(1, 1, 1, 0.85 * (1.0 - k) * (1.0 - k)))
+			draw_rect(r, Color(CURSOR, 0.6 * (1.0 - k)))
+			draw_rect(r.grow(10.0 + 40.0 * k), Color(CURSOR, 0.9 * (1.0 - k)), false, 4.0)
 			for c in _chars:
-				var p: Vector2 = c[0] + c[1] * k
-				U.text(self, p, str(c[2]), 16, Color(0.7, 0.85, 1, 1.0 - k), -1, HORIZONTAL_ALIGNMENT_LEFT, 0)
+				var p: Vector2 = c[0] + c[1] * k + Vector2(0, 260.0 * k * k)
+				draw_set_transform(p, float(c[3]) * k)
+				U.text(self, Vector2.ZERO, str(c[2]), 18, Color(0.7, 0.85, 1, 1.0 - k), -1, HORIZONTAL_ALIGNMENT_LEFT, 0)
+			draw_set_transform(Vector2.ZERO)
 
 
 ## Agente: flechita-cursor que te persigue y hace clic (1 de daño, se puede parry). Se rompe de 2 golpes.
@@ -1207,6 +1287,23 @@ class Crack extends SHazard:
 			z_index = 2
 			if player_ok() and U.dist_to_seg(player_feet() - global_position, Vector2.ZERO, to) < 26.0:
 				hurt(2, true)
+			var n := int(to.length() / 90.0) + 1
+			for i in n:
+				var at := global_position + to * (float(i) + 0.5) / n
+				var b := Burst.new()
+				b.col = Color(0.75, 0.55, 0.35)
+				b.count = 8
+				b.speed = 260.0
+				b.up_bias = 0.9
+				get_parent().add_child(b)
+				b.global_position = at
+				GameFeel.dust(get_parent(), at, 3, Vector2.ZERO, 4.0, Vector2(18, 5))
+				var em := Embers.new()
+				em.area = Rect2(-20, -6, 40, 12)
+				em.emit_for = 0.6
+				em.rate = 18.0
+				get_parent().add_child(em)
+				em.global_position = at
 			for i in rocks:
 				var p := RockPillar.new()
 				get_parent().add_child(p)
@@ -1218,10 +1315,14 @@ class Crack extends SHazard:
 	func _draw() -> void:
 		if t < warn:
 			var k := t / warn
-			U.zigzag(self, Vector2.ZERO, to * k, Color(0.35, 0.22, 0.12, 0.9), 3.0, _seed, 8.0)
-			U.zigzag(self, Vector2.ZERO, to * k, Color(1.0, 0.55, 0.2, 0.5 * absf(sin(t * 14.0))), 1.5, _seed, 8.0)
+			U.zigzag(self, Vector2.ZERO, to * k, Color(1.0, 0.35, 0.05, 0.35 * k), 12.0, _seed, 8.0)
+			U.zigzag(self, Vector2.ZERO, to * k, Color(0.35, 0.22, 0.12, 0.9), 4.0, _seed, 8.0)
+			U.zigzag(self, Vector2.ZERO, to * k, Color(1.0, 0.65, 0.2, 0.6 + 0.4 * absf(sin(t * 14.0))), 2.0, _seed, 8.0)
 		else:
 			var e := clampf((t - warn) / 0.5, 0.0, 1.0)
+			# la grieta queda brillando como lava y se enfría
+			U.zigzag(self, Vector2.ZERO, to, Color(1.0, 0.4, 0.05, 0.5 * (1.0 - e)), 10.0, _seed, 8.0)
+			U.zigzag(self, Vector2.ZERO, to, Color(1.0, 0.85, 0.4, 0.9 * (1.0 - e)), 2.5, _seed, 8.0)
 			var n := int(to.length() / 34.0)
 			for i in n:
 				var p := to * (float(i) + 0.5) / n
@@ -1323,6 +1424,7 @@ class Flare extends SHazard:
 	var t := 0.0
 	var _cd := 0.0
 	var _origin := Vector2.ZERO
+	var _trail := 0.0
 
 	func _ready() -> void:
 		z_index = 5
@@ -1336,6 +1438,23 @@ class Flare extends SHazard:
 		if sun != null and is_instance_valid(sun):
 			_origin = sun.global_position
 		global_position = _origin
+		if t > charge and t < charge + sweep:
+			_trail -= delta
+			if _trail <= 0.0 and is_inside_tree():
+				_trail = 0.09
+				var d := Vector2.from_angle(_angle())
+				var at := _origin + d * randf_range(220.0, 760.0)
+				var sc := Scorch.new()
+				sc.r = 34.0
+				sc.col = Color(1.0, 0.5, 0.1)
+				sc.life = 2.2
+				get_parent().add_child(sc)
+				sc.global_position = at
+				var em := Embers.new()
+				em.emit_for = 0.25
+				em.rate = 50.0
+				get_parent().add_child(em)
+				em.global_position = at
 		if t > charge and t < charge + sweep and _cd <= 0.0 and player_ok():
 			var dir := Vector2.from_angle(_angle())
 			var p := player_body() - _origin
@@ -1357,16 +1476,29 @@ class Flare extends SHazard:
 
 	func _draw() -> void:
 		var dir := Vector2.from_angle(_angle())
+		var side := dir.orthogonal()
 		if t < charge:
 			var k := t / charge
 			draw_line(Vector2.ZERO, dir * length, Color(SUN, 0.25 * absf(sin(t * 18.0))), width * k)
 			draw_dashed_line(Vector2.ZERO, dir * length, Color(1, 0.9, 0.5, 0.8), 2.0, 14.0)
-			draw_circle(Vector2.ZERO, 10.0 + 20.0 * k, Color(1, 0.9, 0.5, 0.5 * k))
+			for i in 3:
+				draw_circle(Vector2.ZERO, (14.0 + 30.0 * k) * (1.0 + 0.5 * i), Color(SUN, 0.12 * k))
+			draw_circle(Vector2.ZERO, 10.0 + 20.0 * k, Color(1, 0.95, 0.6, 0.7 * k))
 		elif t < charge + sweep:
-			var w := width * (1.0 + 0.08 * sin(t * 40.0))
-			draw_line(Vector2.ZERO, dir * length, Color(1.0, 0.45, 0.1, 0.45), w * 1.5)
+			var w := width * (1.0 + 0.1 * sin(t * 40.0))
+			# halo de calor, capas de fuego y núcleo blanco
+			draw_line(Vector2.ZERO, dir * length, Color(1.0, 0.3, 0.05, 0.25), w * 2.4)
+			draw_line(Vector2.ZERO, dir * length, Color(1.0, 0.45, 0.1, 0.5), w * 1.5)
 			draw_line(Vector2.ZERO, dir * length, Color(SUN, 0.95), w)
 			draw_line(Vector2.ZERO, dir * length, Color(1, 1, 0.85), w * 0.35)
+			# ondas de calor que corren por el rayo
+			for i in 9:
+				var d := fmod(t * 900.0 + i * 160.0, length)
+				var o := side * sin(t * 25.0 + i) * w * 0.55
+				draw_line(dir * d + o, dir * (d + 70.0) + o, Color(1, 1, 0.9, 0.55), 3.0)
+			# boca del rayo en el sol
+			draw_circle(Vector2.ZERO, w * 0.9, Color(1, 0.95, 0.7, 0.9))
+			draw_circle(Vector2.ZERO, w * 1.4, Color(SUN, 0.3))
 		else:
 			var e := clampf((t - charge - sweep) / 0.3, 0.0, 1.0)
 			draw_line(Vector2.ZERO, dir * length, Color(SUN, 0.6 * (1.0 - e)), width * (1.0 - e))
@@ -1377,10 +1509,13 @@ class Eclipse extends Node2D:
 	var player: Node2D
 	var life := 4.5
 	var t := 0.0
+	var _stars: Array = []
 
 	func _ready() -> void:
 		z_index = 40
 		add_to_group("barrage_fx")
+		for i in 60:
+			_stars.append([Vector2(randf_range(-900, 900), randf_range(-600, 600)), randf() * TAU, randf_range(1.0, 2.4)])
 
 	func fizzle() -> void:
 		if t < life - 0.4:
@@ -1396,13 +1531,22 @@ class Eclipse extends Node2D:
 
 	func _draw() -> void:
 		var a := clampf(minf(t / 0.5, (life - t) / 0.4), 0.0, 1.0)
-		var hole := 150.0
+		var hole := 150.0 + sin(t * 3.0) * 6.0
 		for i in 16:
 			var r := hole + 40.0 + i * 120.0
-			draw_arc(Vector2.ZERO, r, 0, TAU, 72, Color(0.01, 0.01, 0.04, 0.9 * a), 122.0)
+			draw_arc(Vector2.ZERO, r, 0, TAU, 72, Color(0.01, 0.01, 0.05, 0.9 * a), 122.0)
 		for i in 5:
 			var r := hole + i * 8.0
-			draw_arc(Vector2.ZERO, r, 0, TAU, 64, Color(0.01, 0.01, 0.04, 0.18 * (i + 1) * a), 8.0)
+			draw_arc(Vector2.ZERO, r, 0, TAU, 64, Color(0.01, 0.01, 0.05, 0.18 * (i + 1) * a), 8.0)
+		# estrellas que aparecen en la oscuridad
+		for st in _stars:
+			var p: Vector2 = st[0]
+			if p.length() < hole + 30.0:
+				continue
+			var tw := 0.5 + 0.5 * sin(t * 4.0 + float(st[1]))
+			draw_circle(p, float(st[2]), Color(0.85, 0.9, 1.0, 0.8 * a * tw))
+		# borde del círculo de luz: tenue halo lunar
+		draw_arc(Vector2.ZERO, hole - 4.0, 0, TAU, 64, Color(0.7, 0.8, 1.0, 0.25 * a), 3.0)
 
 
 # ====================================================================================
@@ -1819,3 +1963,272 @@ class Clicker extends Node2D:
 		draw_rect(Rect2(-9, -4, 18, 8), Color(0.1, 0.1, 0.12))
 		draw_rect(Rect2(-9, -4, 18, 8), Color(0.5, 0.5, 0.55), false, 1.0)
 		draw_circle(Vector2(-4, 0), 1.6, Color(1, 0.2, 0.2) if fmod(t * 3.0, 1.0) > 0.5 else Color(0.3, 0.05, 0.05))
+
+
+# ====================================================================================
+# EFECTOS ÉPICOS (comunes): destellos, chispas, brasas, quemaduras, fantasmas, carga
+# ====================================================================================
+
+## Destello de color a pantalla completa (golpes grandes). No bloquea nada.
+class Flash extends CanvasLayer:
+	var col := Color(1, 1, 1)
+	var peak := 0.35
+	var life := 0.35
+	var t := 0.0
+	var _r: ColorRect
+
+	func _ready() -> void:
+		layer = 4
+		_r = ColorRect.new()
+		_r.size = Vector2(1280, 720)
+		_r.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_r.color = Color(col, peak)
+		add_child(_r)
+
+	func _process(delta: float) -> void:
+		t += delta
+		_r.color = Color(col, peak * clampf(1.0 - t / life, 0.0, 1.0))
+		if t > life:
+			queue_free()
+
+
+## Ráfaga de chispas con gravedad (rayos, choques, impactos).
+class Burst extends Node2D:
+	var col := GREEN_HI
+	var count := 18
+	var speed := 320.0
+	var gravity := 520.0
+	var life := 0.7
+	var up_bias := 0.6      ## 0 = en todas direcciones, 1 = hacia arriba
+	var t := 0.0
+	var _p: Array = []     # [pos, vel, size]
+
+	func _ready() -> void:
+		z_index = 9
+		for i in count:
+			var a := randf() * TAU
+			var d := Vector2.from_angle(a)
+			d.y = lerpf(d.y, -absf(d.y), up_bias)
+			_p.append([Vector2.ZERO, d.normalized() * speed * randf_range(0.35, 1.0), randf_range(1.5, 3.5)])
+
+	func _process(delta: float) -> void:
+		t += delta
+		for p in _p:
+			p[1].y += gravity * delta
+			p[0] += p[1] * delta
+		if t > life:
+			queue_free()
+		queue_redraw()
+
+	func _draw() -> void:
+		var a := clampf(1.0 - t / life, 0.0, 1.0)
+		for p in _p:
+			var v: Vector2 = p[1]
+			draw_line(p[0], p[0] - v * 0.03, Color(col, a), float(p[2]))
+			draw_circle(p[0], float(p[2]) * 0.6, Color(1, 1, 1, a))
+
+
+## Brasas o chispas que suben despacio desde una zona (se apagan solas).
+class Embers extends Node2D:
+	var area := Rect2(-40, -10, 80, 20)
+	var col := Color(1.0, 0.55, 0.15)
+	var rate := 40.0
+	var emit_for := 1.0
+	var t := 0.0
+	var _acc := 0.0
+	var _p: Array = []   # [pos, vel, life, size]
+
+	func _ready() -> void:
+		z_index = 8
+
+	func _process(delta: float) -> void:
+		t += delta
+		if t < emit_for:
+			_acc += delta * rate
+			while _acc >= 1.0:
+				_acc -= 1.0
+				_p.append([Vector2(randf_range(area.position.x, area.end.x), randf_range(area.position.y, area.end.y)),
+					Vector2(randf_range(-20, 20), randf_range(-90, -30)), randf_range(0.5, 1.3), randf_range(1.5, 3.0)])
+		for p in _p:
+			p[0] += p[1] * delta
+			p[1].x += sin(t * 6.0 + p[0].y * 0.05) * 30.0 * delta
+			p[2] -= delta
+		_p = _p.filter(func(p: Array) -> bool: return float(p[2]) > 0.0)
+		if t > emit_for and _p.is_empty():
+			queue_free()
+		queue_redraw()
+
+	func _draw() -> void:
+		for p in _p:
+			var a := clampf(float(p[2]) * 1.5, 0.0, 1.0)
+			draw_circle(p[0], float(p[3]) * 2.0, Color(col, 0.18 * a))
+			draw_circle(p[0], float(p[3]), Color(col.lightened(0.3), a))
+
+
+## Marca quemada en el piso que se enfría poco a poco (solo visual).
+class Scorch extends Node2D:
+	var r := 46.0
+	var col := GREEN
+	var life := 3.0
+	var t := 0.0
+	var _cracks: Array = []
+
+	func _ready() -> void:
+		z_index = -3
+		for i in 7:
+			_cracks.append([randf() * TAU, randf_range(0.7, 1.4)])
+
+	func _process(delta: float) -> void:
+		t += delta
+		if t > life:
+			queue_free()
+		queue_redraw()
+
+	func _draw() -> void:
+		var a := clampf(1.0 - t / life, 0.0, 1.0)
+		var hot := clampf(1.0 - t / (life * 0.4), 0.0, 1.0)
+		var pts := PackedVector2Array()
+		for i in 24:
+			var ang := TAU * i / 24.0
+			pts.append(Vector2(cos(ang) * r, sin(ang) * r * 0.5))
+		draw_colored_polygon(pts, Color(0.05, 0.05, 0.06, 0.55 * a))
+		for c in _cracks:
+			var d := Vector2.from_angle(c[0])
+			var e := d * r * float(c[1])
+			e.y *= 0.5
+			draw_line(Vector2.ZERO, e, Color(col.lightened(0.2), 0.8 * hot * a), 2.0)
+			draw_line(Vector2.ZERO, e * 0.6, Color(1, 1, 1, 0.6 * hot * a), 1.0)
+		pts.append(pts[0])
+		draw_polyline(pts, Color(col, 0.5 * hot * a), 2.0)
+
+
+## Copia fantasma de la pose del boss (al embestir o teletransportarse).
+class Ghost extends Node2D:
+	var tex: Texture2D
+	var tint := Color(0.45, 0.75, 1.0, 0.7)
+	var flip := false
+	var life := 0.3
+	var t := 0.0
+
+	func _ready() -> void:
+		z_index = 0
+
+	func _process(delta: float) -> void:
+		t += delta
+		if t > life:
+			queue_free()
+		queue_redraw()
+
+	func _draw() -> void:
+		if tex == null:
+			return
+		var sz := tex.get_size()
+		var a := tint.a * clampf(1.0 - t / life, 0.0, 1.0)
+		draw_set_transform(Vector2.ZERO, 0.0, Vector2(-1.0 if flip else 1.0, 1.0))
+		draw_texture(tex, Vector2(-sz.x * 0.5, -sz.y), Color(tint, a))
+		draw_set_transform(Vector2.ZERO)
+
+
+## Carga: partículas que se juntan en un punto y un brillo que crece (antes de un golpe grande).
+class Charge extends Node2D:
+	var col := GREEN_HI
+	var dur := 0.6
+	var radius := 120.0
+	var follow: Node2D           ## si existe, sigue a este nodo + offset
+	var offset := Vector2.ZERO
+	var t := 0.0
+	var _p: Array = []   # [ángulo, distancia inicial, retraso]
+
+	func _ready() -> void:
+		z_index = 12
+		for i in 26:
+			_p.append([randf() * TAU, randf_range(0.6, 1.0) * radius, randf_range(0.0, 0.5)])
+
+	func _process(delta: float) -> void:
+		t += delta
+		if follow != null and is_instance_valid(follow):
+			global_position = follow.global_position + offset
+		if t > dur + 0.15:
+			queue_free()
+		queue_redraw()
+
+	func _draw() -> void:
+		var k := clampf(t / dur, 0.0, 1.0)
+		for p in _p:
+			var s := clampf((t - float(p[2]) * dur) / (dur * 0.6), 0.0, 1.0)
+			if s <= 0.0 or s >= 1.0:
+				continue
+			var d := Vector2.from_angle(float(p[0]) + s * 1.5)
+			var a := d * float(p[1]) * (1.0 - s)
+			draw_line(a, a - d * 14.0 * (1.0 - s), Color(col, 0.8), 2.0)
+		for i in 3:
+			draw_circle(Vector2.ZERO, (6.0 + 22.0 * k) * (1.0 + 0.4 * i), Color(col, 0.12 * k))
+		draw_circle(Vector2.ZERO, 4.0 + 8.0 * k, Color(1, 1, 1, 0.9 * k))
+		if t > dur:
+			var e := clampf((t - dur) / 0.15, 0.0, 1.0)
+			draw_arc(Vector2.ZERO, 20.0 + 80.0 * e, 0, TAU, 32, Color(col, 1.0 - e), 4.0)
+
+
+## Anillo de onda solo visual (grueso, con brillo), para acompañar golpes.
+class Ring extends Node2D:
+	var col := GREEN_HI
+	var max_r := 260.0
+	var life := 0.5
+	var width := 10.0
+	var flat := 0.5
+	var t := 0.0
+
+	func _ready() -> void:
+		z_index = -1
+
+	func _process(delta: float) -> void:
+		t += delta
+		if t > life:
+			queue_free()
+		queue_redraw()
+
+	func _draw() -> void:
+		var k := clampf(t / life, 0.0, 1.0)
+		var e := 1.0 - pow(1.0 - k, 3.0)
+		var r := max_r * e
+		var a := 1.0 - k
+		var pts := PackedVector2Array()
+		for i in 49:
+			var ang := TAU * i / 48.0
+			pts.append(Vector2(cos(ang) * r, sin(ang) * r * flat))
+		draw_polyline(pts, Color(col, 0.35 * a), width * 2.2)
+		draw_polyline(pts, Color(col.lightened(0.3), 0.9 * a), width * (1.0 - k * 0.6))
+		draw_polyline(pts, Color(1, 1, 1, 0.8 * a), 2.0)
+
+
+## Líneas de velocidad a pantalla completa hacia un punto (embestidas, ASTRA).
+class SpeedLines extends CanvasLayer:
+	var life := 0.45
+	var col := Color(1, 1, 1, 0.5)
+	var t := 0.0
+	var _c: Control
+	var _l: Array = []
+
+	func _ready() -> void:
+		layer = 3
+		_c = Control.new()
+		_c.size = Vector2(1280, 720)
+		_c.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_c.draw.connect(_paint)
+		add_child(_c)
+		for i in 46:
+			_l.append([randf() * TAU, randf_range(380.0, 520.0), randf_range(60.0, 220.0), randf_range(1.0, 3.0)])
+
+	func _process(delta: float) -> void:
+		t += delta
+		if t > life:
+			queue_free()
+		_c.queue_redraw()
+
+	func _paint() -> void:
+		var a := col.a * clampf(1.0 - t / life, 0.0, 1.0)
+		var c := Vector2(640, 360)
+		for l in _l:
+			var d := Vector2.from_angle(float(l[0]))
+			var r0: float = float(l[1]) - fmod(t * 900.0, 120.0)
+			_c.draw_line(c + d * r0, c + d * (r0 + float(l[2])), Color(col, a), float(l[3]))

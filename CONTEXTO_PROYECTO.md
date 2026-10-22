@@ -4,7 +4,7 @@
 > **Regla de oro:** ANTES de tocar nada, lee este archivo completo. AL TERMINAR cada tarea (o antes de que se corte la sesión), actualiza las secciones **Estado actual**, **Trabajo en curso** y **Bitácora**. Si no queda escrito aquí, la otra sesión no lo sabe.
 
 - Ruta del archivo: `C:\Users\leopo\Documents\Juegos\Godot\prototipo\CONTEXTO_PROYECTO.md`
-- Última actualización: 2026-10-22 — boss 9 SUDO con sprites reales de grokbot (poses) y arena pintada
+- Última actualización: 2026-10-22 — ataques de SUDO más épicos (cargas, destellos, estelas, quemaduras)
 
 ---
 
@@ -199,6 +199,8 @@ J ataque leve (combo) · K especial (cooldown) · L parry · Espacio ultimate (m
 
 - 22-10 ~08:30: **SUDO con sprites reales.** Grokbot entregó las 12 hojas de `GROKBOT_BOSS_9.md` (todas aceptadas; en `moves8` no aparece el clicker, a propósito se deja). Recortadas con el nuevo `tools/slice_sudo_sheets.py` (rejilla 4x2 por manchas, despill del borde menta, lienzo con los PIES abajo al centro) → `assets/sprites/bosses/sudo/` (22 poses `boss_sudo_<pose>_<i>` + objetos `boss_sudo_screen|minions|planets|props|projectiles_<i>`). `boss_sudo.gd`: el cuerpo ya no se arma por piezas, cambia de POSE: `pose_name()` (pistas `_hint()`, estado, ánimo y la rotación de los brazos, que siguen girando invisibles con `sprite_mode`), tabla `ANIMS`, mano del clicker por pose (`HAND`); la pantalla usa `boss_sudo_screen_0/1/2` (normal/agrietada en el modo ultra/apagada al morir). `boss_sudo_fx.gd`: `U.spr`/`U.spr_feet`; usan sprite el cubo de Realtime, la bola Edge, cursor de Tab, cursores-agente, grokbots (caminar, pintar, roto), proyectiles (bloque, luna, candado, roca), candados, tarjeta 2FA, llave, astros (normales y OFFLINE), pilares de roca, la Tierra de la órbita, la bola ASTRA y el clicker que cae. Arena pintada `assets/sprites/arenas/arena_sudo(_caos).png`; la caos tiene el escenario más abajo, así que `boss_arena_fx.gd` acepta `FLOOR_FRAC["<boss>_caos"]`. `boss_sprites.gd`: carpeta `bosses/sudo/`. Estatua regenerada con la pose `raise_1` (`pose_force`). Verificado con el bot: 40/40 + 6/6 + 11/11; video `Claude outputs/boss_sudo_sprites.mp4`. SIGUIENTE: Johan lo prueba en el editor y se lo muestra al Líder del Club IA (él decide si se queda).
 
+- 22-10 ~10:00: **Ataques de SUDO más épicos** (pedido de Johan). Efectos comunes nuevos en `boss_sudo_fx.gd` (sección EFECTOS ÉPICOS): `Flash` (destello a pantalla), `Burst` (chispas con gravedad), `Embers` (brasas), `Scorch` (quemadura en el piso que se enfría), `Ghost` (fantasma de la pose), `Charge` (partículas que se juntan antes del golpe), `Ring` (onda visual gruesa), `SpeedLines`. En `boss_sudo.gd`: `_fx`, `_flash`, `_charge`, `_ring`, `_burst`, `_cam_punch` (zoom rápido, no en la cinemática) y `_ghost`. Cambios: rayo de la base (carga en la mano, nube que se carga arriba, círculo con código girando, rayo grueso con ramas, chispas, onda y quemadura), Tab (chispas al agacharse, estela de fantasmas, líneas de velocidad, onda al aterrizar), Cmd+K (mira que se cierra, código reescribiéndose, explosión con símbolos, onda y chispas), Realtime (arcos eléctricos y pulsos de datos), pulso (onda y destello), placas tectónicas (la Tierra se carga, grietas de lava, rocas que estallan, golpe de cámara), llamarada (el Sol se carga, rayo en capas con ondas de calor, quemaduras y brasas por donde pasa, pantalla caliente y temblor), supernova (el Sol se infla latiendo, destello blanco, anillos de fuego, lluvia de brasas), eclipse (anillo de diamante y estrellas en la oscuridad) y ASTRA (destellos, ondas, líneas de velocidad y chispas en el choque). Solo visual: el daño y los tiempos de esquiva no cambiaron. Verificado: all 40/40, fail 6/6; video `Claude outputs/boss_sudo_epico.mp4`.
+
 **Siguientes pasos generales (después del Pulido 4):**
 1. Ajustar números a gusto del usuario: cooldowns, daño, ventana/cono del parry, duración de ultimates, frecuencia de ataque del dummy.
 2. Enemigos reales (IA, varios tipos) en lugar del dummy; efectos de sonido.
@@ -207,6 +209,10 @@ J ataque leve (combo) · K especial (cooldown) · L parry · Espacio ultimate (m
 ---
 
 ## 7. Bitácora
+
+### 2026-10-22 (2) — SUDO: ataques más épicos
+- Efectos nuevos (Flash, Burst, Embers, Scorch, Ghost, Charge, Ring, SpeedLines) en `boss_sudo_fx.gd` y su uso en rayo, Tab, Cmd+K, Realtime, pulso, placas, llamarada, supernova, eclipse y ASTRA. Solo visual.
+- Verificado (nube, bots): 40/40 y 6/6. Video `Claude outputs/boss_sudo_epico.mp4`.
 
 ### 2026-10-22 — SUDO con sprites reales (poses) + arena pintada
 - 12 hojas de grokbot integradas con `tools/slice_sudo_sheets.py`; `boss_sudo.gd` dibuja la pose del momento (`pose_name`/`pose_frame`/`ANIMS`), efectos con sprites en `boss_sudo_fx.gd`, arena con `FLOOR_FRAC` propio para la versión caos.

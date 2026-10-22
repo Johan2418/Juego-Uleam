@@ -543,6 +543,72 @@ func _hand_pos(arm: Arm) -> Vector2:
 	return arm.to_global(Vector2(0, ARM_LEN))
 
 
+## Efectos épicos -------------------------------------------------------------------
+func _fx(n: Node2D, at: Vector2) -> Node2D:
+	get_parent().add_child(n)
+	n.global_position = at
+	return n
+
+
+func _flash(col: Color, peak: float = 0.3, life: float = 0.35) -> void:
+	var f := Fx.Flash.new()
+	f.col = col
+	f.peak = peak
+	f.life = life
+	get_parent().add_child(f)
+
+
+func _charge(at: Vector2, col: Color, dur: float, radius: float = 120.0, follow: Node2D = null) -> void:
+	var c := Fx.Charge.new()
+	c.col = col
+	c.dur = dur
+	c.radius = radius
+	if follow:
+		c.follow = follow
+		c.offset = at - follow.global_position
+	_fx(c, at)
+
+
+func _ring(at: Vector2, col: Color, r: float, life: float = 0.45, width: float = 10.0) -> void:
+	var g := Fx.Ring.new()
+	g.col = col
+	g.max_r = r
+	g.life = life
+	g.width = width
+	_fx(g, at)
+
+
+func _burst(at: Vector2, col: Color, count: int = 18, speed: float = 320.0) -> void:
+	var b := Fx.Burst.new()
+	b.col = col
+	b.count = count
+	b.speed = speed
+	_fx(b, at)
+
+
+## Golpe de cámara: zoom rápido hacia adentro y de vuelta (no durante la cinemática, que mueve el zoom).
+func _cam_punch(amount: float = 0.06, time: float = 0.28) -> void:
+	if not _player_ok() or state == "final":
+		return
+	var cam := player.get_node_or_null("Camera2D") as Camera2D
+	if cam == null:
+		return
+	var tw := cam.create_tween()
+	tw.tween_property(cam, "zoom", Vector2.ONE * (1.0 + amount), time * 0.25).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tw.tween_property(cam, "zoom", Vector2.ONE, time * 0.75).set_trans(Tween.TRANS_SINE)
+
+
+## Copia fantasma de la pose actual (estela de la embestida).
+func _ghost(tint: Color) -> void:
+	if not sprites:
+		return
+	var g := Fx.Ghost.new()
+	g.tex = Spr.tex("boss_sudo_" + pose_frame())
+	g.tint = tint
+	g.flip = pose_flipped()
+	_fx(g, global_position + rig_off)
+
+
 func _impact(at: Vector2, strength: float) -> void:
 	_shake(strength, 0.1 + strength * 0.03)
 	GameFeel.dust(get_parent(), at, int(4 + strength), Vector2.ZERO, 5.0, Vector2(20 + strength * 3.0, 6))
@@ -645,9 +711,12 @@ func _atk_bolt(tok: int) -> void:
 	_tw(arm_r, "rotation", -PI * 0.85, 0.25)
 	_pose(Vector2(0, -6), -0.03, 0.25)
 	body.mood = 1
-	if not await _wait(0.3, tok):
+	_charge(global_position + HAND["raise"], Fx.GREEN_HI, 0.45, 110.0, self)
+	if not await _wait(0.5, tok):
 		return
 	_click()
+	_ring(_hand_pos(arm_r), Fx.GREEN_HI, 90.0, 0.3, 6.0)
+	_flash(Fx.GREEN_HI, 0.12, 0.25)
 	var n: int = [3, 4, 5][phase - 1] + (1 if enraged else 0)
 	for i in n:
 		if not _player_ok():
@@ -754,6 +823,7 @@ func _atk_tab(tok: int) -> void:
 		_tw(arm_l, "rotation", PI * 0.3, 0.2)
 		_hint("crouch", [0.6, 0.5, 0.42][phase - 1])
 		dash_flip = target.x < from.x
+		_burst(global_position + Vector2(0, -20), Color(0.6, 0.8, 1.0), 10, 180.0)
 		if not await _wait([0.6, 0.5, 0.42][phase - 1], tok):
 			return
 		# embestida
@@ -766,12 +836,26 @@ func _atk_tab(tok: int) -> void:
 		tw.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
 		for k in 3:
 			GameFeel.dust(get_parent(), from.lerp(target, k / 3.0), 2, Vector2.ZERO, 3.0)
-		if not await _wait(dt, tok):
-			return
+		if i == n - 1 and not _fake:
+			var sl := Fx.SpeedLines.new()
+			sl.life = dt + 0.2
+			sl.col = Color(0.8, 0.9, 1.0, 0.45)
+			get_parent().add_child(sl)
+		var gt := 0.0
+		while gt < dt:
+			_ghost(Color(0.45, 0.75, 1.0, 0.55))
+			if not await _wait(0.03, tok):
+				return
+			gt += 0.03
 		_dashing = false
 		_clamp_inside()
-		_impact(global_position, 2.0)
+		_impact(global_position, 3.0)
 		_hint("stomp", 0.2)
+		if not _fake:
+			_ring(global_position, Color(0.55, 0.8, 1.0), 140.0, 0.3, 7.0)
+			_burst(global_position + Vector2(0, -10), Color(0.7, 0.85, 1.0), 12, 260.0)
+			if i == n - 1:
+				_cam_punch(0.05)
 		if not await _wait(0.22, tok):
 			return
 	_end_attack(tok)
@@ -829,6 +913,9 @@ func _atk_pulse(tok: int) -> void:
 	_tw(arm_l, "rotation", 0.4, 0.06)
 	_tw(arm_r, "rotation", -0.4, 0.06)
 	_hint("stomp", 0.45)
+	_ring(global_position, Fx.GREEN_HI, 250.0, 0.45, 12.0)
+	_flash(Fx.GREEN_HI, 0.15, 0.25)
+	_cam_punch(0.05)
 	var ring := BossFx.ShockRing.new()
 	ring.max_r = 240.0
 	_add_fx(ring, global_position)
@@ -1166,6 +1253,10 @@ func _atk_eclipse(tok: int) -> void:
 	if not await _wait(0.6, tok):
 		_planet_pin.clear()
 		return
+	var sky := global_position + Vector2(0, -290)
+	_ring(sky, Color(0.85, 0.9, 1.0), 160.0, 0.6, 8.0)
+	_burst(sky + Vector2(16, -14), Color(1, 1, 1), 14, 220.0)
+	_flash(Color(1, 1, 1), 0.35, 0.3)
 	var e := Fx.Eclipse.new()
 	e.life = 4.5
 	_add_fx(e, _player_body() if _player_ok() else global_position)
@@ -1203,12 +1294,17 @@ func _atk_quake(tok: int) -> void:
 	_planet_glow("terra")
 	_pose(Vector2(0, -8), 0.0, 0.2)
 	_tw(arm_l, "rotation", PI * 0.85, 0.2)
-	if not await _wait(0.3, tok):
+	if _planet("terra"):
+		_charge(_planet_pos("terra"), Color(1.0, 0.55, 0.2), 0.45, 100.0, _planet("terra"))
+	if not await _wait(0.5, tok):
 		return
 	_pose(Vector2(0, 8), 0.0, 0.06)
 	_tw(arm_l, "rotation", PI * 0.2, 0.06)
 	_hint("stomp", 0.45)
-	_impact(global_position, 5.0)
+	_impact(global_position, 9.0)
+	_ring(global_position, Color(1.0, 0.6, 0.25), 300.0, 0.5, 14.0)
+	_flash(Color(1.0, 0.6, 0.3), 0.14, 0.3)
+	_cam_punch(0.07)
 	var origin := global_position + Vector2(_planet(  "terra").position.x if _planet("terra") else 0.0, 0)
 	var n := 3 if not enraged else 5
 	var base := (_player_feet() - origin).angle() if _player_ok() else PI * 0.5
@@ -1259,6 +1355,10 @@ func _atk_flare(tok: int) -> void:
 	if not await _wait(0.4, tok):
 		_planet_pin.erase("sol")
 		return
+	_charge(_planet_pos("sol"), Fx.SUN, 0.5, 150.0, _planet("sol"))
+	if not await _wait(0.3, tok):
+		_planet_pin.erase("sol")
+		return
 	var f := Fx.Flare.new()
 	f.sun = _planet("sol")
 	var from := _planet_pos("sol")
@@ -1269,7 +1369,20 @@ func _atk_flare(tok: int) -> void:
 	f.to_a = mid + 0.85 * side
 	f.sweep = 2.2 if not enraged else 1.7
 	_add_fx(f, from)
-	if not await _wait(f.charge + f.sweep + 0.2, tok):
+	var sweep := f.sweep
+	if not await _wait(f.charge, tok):
+		_planet_pin.erase("sol")
+		return
+	_flash(Color(1.0, 0.5, 0.1), 0.18, sweep + 0.3)
+	_cam_punch(0.04, 0.3)
+	var st := 0.0
+	while st < sweep:
+		_shake(2.5, 0.12)
+		if not await _wait(0.12, tok):
+			_planet_pin.erase("sol")
+			return
+		st += 0.12
+	if not await _wait(0.2, tok):
 		_planet_pin.erase("sol")
 		return
 	_planet_pin.erase("sol")
@@ -1280,18 +1393,34 @@ func _atk_flare(tok: int) -> void:
 func _atk_nova(tok: int) -> void:
 	var sol := _planet("sol")
 	_planet_pin["sol"] = Vector2(0, -60)
+	_tw(arm_l, "rotation", PI * 0.9, 0.3)
+	_tw(arm_r, "rotation", -PI * 0.9, 0.3)
 	if sol:
-		_tw(sol, "scale", Vector2(1.8, 1.8), 0.6)
-	if not await _wait(0.7, tok):
+		var grow := create_tween()
+		for k in 4:
+			grow.tween_property(sol, "scale", Vector2.ONE * (1.4 + 0.3 * k), 0.12)
+			grow.tween_property(sol, "scale", Vector2.ONE * (1.25 + 0.3 * k), 0.08)
+		_tweens.append(grow)
+		_charge(global_position + Vector2(0, -60), Fx.SUN, 0.8, 220.0, self)
+	if not await _wait(0.85, tok):
 		_planet_pin.erase("sol")
 		return
+	_flash(Color(1, 0.95, 0.8), 0.55, 0.45)
+	_cam_punch(0.09, 0.35)
+	var em := Fx.Embers.new()
+	em.area = Rect2(-420, -320, 840, 560)
+	em.emit_for = 1.8
+	em.rate = 60.0
+	_fx(em, global_position)
 	for i in 3:
 		var ring := BossFx.ShockRing.new()
 		ring.max_r = 520.0
 		ring.speed = 330.0
 		_add_fx(ring, global_position)
+		_ring(global_position, Color(1.0, 0.55, 0.15), 520.0, 520.0 / 330.0, 22.0)
+		_burst(global_position + Vector2(0, -60), Fx.SUN, 20, 420.0)
 		_planet_glow("sol")
-		_shake(3.0, 0.15)
+		_shake(6.0, 0.2)
 		if not await _wait(0.5, tok):
 			_planet_pin.erase("sol")
 			if sol and is_instance_valid(sol):
@@ -1617,6 +1746,8 @@ func _start_final() -> void:
 	ball.global_position = global_position + Vector2(0, -300)
 	_cinema.append(ball)
 	GameFeel.parry_burst(get_parent(), ball.global_position, 60.0)
+	_flash(Color(0.85, 0.8, 1.0), 0.5, 0.4)
+	_ring(ball.global_position, Color(0.75, 0.65, 1.0), 360.0, 0.6, 14.0)
 	_shake(6.0, 0.4)
 	# la espiral de estrellas
 	var spiral := Fx.StarSpiral.new()
@@ -1636,6 +1767,8 @@ func _start_final() -> void:
 		return
 	spiral.queue_free()
 	GameFeel.parry_burst(get_parent(), ball.global_position, 80.0)
+	_flash(Color(1, 1, 1), 0.45, 0.3)
+	_ring(ball.global_position, Color(0.8, 0.7, 1.0), 420.0, 0.5, 18.0)
 	_shake(8.0, 0.4)
 	if not _player_ok():
 		return
@@ -1643,6 +1776,11 @@ func _start_final() -> void:
 	_point(arm_r, _player_body(), 0.1)
 	_tw(arm_l, "rotation", REST_L, 0.2)
 	var target := _player_body()
+	var sl := Fx.SpeedLines.new()
+	sl.life = 1.6
+	sl.col = Color(0.85, 0.8, 1.0, 0.5)
+	get_parent().add_child(sl)
+	_cinema.append(sl)
 	Engine.time_scale = 0.35
 	var throw := create_tween()
 	throw.tween_property(ball, "global_position", target, 0.45).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
@@ -1687,6 +1825,9 @@ func _start_final() -> void:
 		_astra_fail(tok, ball)
 		return
 	Engine.time_scale = 1.0
+	_flash(Color(0.7, 0.9, 1.0), 0.35, 0.3)
+	_ring(ball.global_position, Color(0.6, 0.85, 1.0), 260.0, 0.45, 12.0)
+	_burst(ball.global_position, Color(0.8, 0.9, 1.0), 24, 420.0)
 	GameFeel.parry_burst(get_parent(), ball.global_position, 50.0)
 	GameFeel.hit_stop(get_tree(), 0.12)
 	_shake(8.0, 0.3)
@@ -1711,6 +1852,8 @@ func _start_final() -> void:
 		clash.b = _hand_pos(arm_r)
 		_hint("point", 0.2)
 		_shake(1.5, 0.05)
+		if Engine.get_process_frames() % 6 == 0 and is_instance_valid(ball):
+			_burst(ball.global_position, Color(0.85, 0.85, 1.0), 6, 300.0)
 		await get_tree().process_frame
 	if tok != _tok:
 		return
@@ -1977,6 +2120,7 @@ func start_intro(skip: bool) -> void:
 	b.warn = 0.25
 	b.r = 30.0
 	b.harmless = true
+	b.big = false
 	get_parent().add_child(b)
 	b.global_position = _hand_pos(arm_r) + Vector2(0, 10)
 	await get_tree().create_timer(0.26).timeout
