@@ -82,7 +82,7 @@ const ARENA := Rect2(-520, -330, 1040, 660)
 ## Música de cada boss: <boss>_p1/_p2/_p3 (una por fase, cada vez más intensa), _win al vencerlo y lose.ogg al perder.
 ## Generada por tools/boss_music.py. La fase 1 trae una intro de 2 compases y hace loop desde aquí (segundos).
 const MUSIC_DIR := "res://assets/audio/bosses/"
-const MUSIC_INTRO := {"deadbeef": 3.2, "bsod": 4.0, "div0": 3.75, "syntax": 3.8095, "stack": 3.3333, "judge": 4.0678, "tex": 2.4, "kp": 3.2877, "sudo": 3.75}
+const MUSIC_INTRO := {"deadbeef": 3.2, "bsod": 4.0, "div0": 3.75, "syntax": 3.8095, "stack": 3.3333, "judge": 4.0678, "tex": 2.4, "kp": 3.2877, "sudo": 3.4783}
 const MUSIC_DB := -6.0
 const WALL := 40.0
 
