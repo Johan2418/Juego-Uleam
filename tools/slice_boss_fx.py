@@ -47,6 +47,12 @@ def slice_sheet(kind: str, fname: str, prefix: str, anchor: str, target: int, ma
         x0, y0, x1, y1 = box
         if anchor == "ground":
             ax, ay = (S.feet_x(m, box) - x0) * k, h
+        elif anchor == "cell":
+            # grokbot dibuja cada cuadro centrado en su celda: el centro de la celda es el ancla fija
+            hh, ww = rgb.shape[:2]
+            cx = ww / 4 * (i % 4 + 0.5)
+            cy = hh / 2 * (i // 4 + 0.5)
+            ax, ay = (cx - x0) * k, (cy - y0) * k
         else:
             ax, ay = w / 2, h / 2
         hx = int(np.ceil(max(ax, w - ax))) + 1
@@ -68,7 +74,7 @@ def main() -> None:
     kinds = sys.argv[1:] or list(BOSSES)
     for kind in kinds:
         for fname, prefix, anchor, px, magenta, _es, _en in BOSSES[kind][1]:
-            slice_sheet(kind, fname, prefix, anchor, px, magenta)
+            slice_sheet(kind, fname, prefix, "cell", px, magenta)
 
 
 if __name__ == "__main__":
