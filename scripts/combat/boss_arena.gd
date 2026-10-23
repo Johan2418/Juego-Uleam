@@ -8,6 +8,14 @@ const BossHud := preload("res://scripts/combat/boss_hud.gd")
 const ArenaFx := preload("res://scripts/combat/boss_arena_fx.gd")
 const Coop := preload("res://scripts/coop.gd")
 const CoopBoss := preload("res://scripts/combat/coop_boss.gd")
+const Epic := preload("res://scripts/combat/epic_fx.gd")
+const GameFeel := preload("res://scripts/combat/game_feel.gd")
+## Color de acento de cada boss (efectos épicos de aturdido, cambio de fase y victoria).
+const ACCENT := {
+	"deadbeef": Color(1.0, 0.3, 0.2), "bsod": Color(0.3, 0.6, 1.0), "div0": Color(1.0, 0.78, 0.2),
+	"syntax": Color(0.45, 0.9, 0.55), "stack": Color(1.0, 0.6, 0.15), "judge": Color(0.9, 0.3, 0.3),
+	"tex": Color(1.0, 0.3, 1.0), "kp": Color(1.0, 0.65, 0.2), "sudo": Color(0.3, 0.9, 0.6),
+}
 ## Multijugador: segundos que el compañero tiene que quedarse al lado para levantar a un caído.
 const REVIVE_TIME := 2.0
 const REVIVE_RANGE := 80.0
@@ -499,8 +507,25 @@ func _on_boss_hp(hp: int, max_hp: int) -> void:
 		_weak_hits += 1
 
 
+func _boss_core() -> Vector2:
+	return boss.global_position + Vector2(0, -110) if is_instance_valid(boss) else Vector2.ZERO
+
+
+func _accent() -> Color:
+	return ACCENT.get(boss_kind, Color(1, 0.8, 0.4))
+
+
 func _on_phase(phase: int, title: String) -> void:
 	_phase_label.text = "Fase %d/3" % phase
+	# cambio de fase épico: destello, onda doble, chispas, líneas de velocidad y zoom
+	if phase >= 2 and boss_kind != "sudo":
+		var c := _boss_core()
+		Epic.flash(self, _accent().lightened(0.5), 0.3, 0.5)
+		Epic.ring(self, c + Vector2(0, 100), _accent(), 420.0, 0.7, 14.0)
+		Epic.ring(self, c + Vector2(0, 100), Color.WHITE, 260.0, 0.5, 6.0)
+		Epic.burst(self, c, _accent().lightened(0.3), 40, 520.0, 0.5, 0.9)
+		Epic.speed_lines(self, 0.6, Color(_accent().lightened(0.5), 0.55))
+		Epic.cam_punch(get_tree(), 0.08, 0.4)
 	_show_banner(title, Color(1, 0.35, 0.3), 1.0)
 	_set_ambient_phase(phase)
 	if _fighting and not _over:
@@ -522,6 +547,44 @@ func _set_ambient_phase(phase: int) -> void:
 
 func _on_stunned() -> void:
 	_show_banner("¡PUNTO DÉBIL!  daño x2", Color(1, 0.95, 0.4), 1.4)
+	if boss_kind != "sudo" and is_instance_valid(boss):
+		var c := _boss_core()
+		Epic.ring(self, c + Vector2(0, 100), Color(1, 0.95, 0.4), 300.0, 0.55, 10.0)
+		Epic.burst(self, c, Color(1, 0.95, 0.5), 30, 420.0, 0.8, 0.8)
+		Epic.word(self, c + Vector2(0, -60), "¡ATURDIDO!", Color(1, 0.95, 0.4), 34)
+		Epic.cam_punch(get_tree(), 0.05, 0.25)
+	_crit_qte()
+
+
+## Premio de la mecánica de cada boss: al aturdirlo sale un QTE de GOLPE CRÍTICO (cámara lenta corta).
+## Acertarlo le quita CRIT_DMG (x2 si tiene el punto débil abierto) con un golpe enorme.
+const CRIT_DMG := 3
+var _crit_busy := false
+
+
+func _crit_qte() -> void:
+	if _crit_busy or _over or not is_instance_valid(boss):
+		return
+	_crit_busy = true
+	await get_tree().create_timer(0.35).timeout
+	if _over or not is_instance_valid(boss) or str(boss.get("state")) in ["dead", "final", "transition", "paused"]:
+		_crit_busy = false
+		return
+	var q := Epic.qte(self, "timing", "action_primary", "¡GOLPE CRÍTICO!", {"dur": 0.9, "col": _accent().lightened(0.3), "sub": "Pulsa cuando el aro llegue al verde"})
+	Engine.time_scale = 0.55
+	var ok: bool = await q.done
+	Engine.time_scale = 1.0
+	_crit_busy = false
+	if not ok or _over or not is_instance_valid(boss) or str(boss.get("state")) in ["dead", "final", "transition", "paused"]:
+		return
+	var who: Node2D = CoopBoss.nearest_to(get_tree(), _boss_core(), player, 0.0)
+	var from := who.global_position if who else _boss_core() + Vector2(0, 120)
+	boss.call("take_hit", CRIT_DMG, from)
+	var c := _boss_core()
+	Epic.big_hit(self, c + Vector2(0, 60), _accent(), 8.0)
+	Epic.word(self, c + Vector2(0, -90), "¡CRÍTICO!", Color(1, 0.9, 0.3), 46)
+	Epic.speed_lines(self, 0.35, Color(1, 1, 1, 0.5))
+	GameFeel.hit_stop(get_tree(), 0.12)
 
 
 func _on_arm_broken(_arm: String) -> void:
@@ -530,6 +593,8 @@ func _on_arm_broken(_arm: String) -> void:
 
 func _on_staggered() -> void:
 	_show_banner("¡SE TAMBALEA!", Color(1, 0.8, 0.5), 0.6)
+	if is_instance_valid(boss):
+		Epic.burst(self, _boss_core(), Color(1, 0.85, 0.5), 14, 300.0, 0.7, 0.5)
 
 
 func _on_player_hp(hp: int, _max_hp: int) -> void:

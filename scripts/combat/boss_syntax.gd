@@ -9,6 +9,7 @@ extends CharacterBody2D
 
 const GameFeel := preload("res://scripts/combat/game_feel.gd")
 const CoopBoss := preload("res://scripts/combat/coop_boss.gd")
+const Epic := preload("res://scripts/combat/epic_fx.gd")
 const Barrage := preload("res://scripts/combat/boss_barrage.gd")
 const BossFx := preload("res://scripts/combat/boss_fx.gd")
 const Fx := preload("res://scripts/combat/boss_syntax_fx.gd")
@@ -431,13 +432,21 @@ func _rest_arms() -> void:
 	hand.tool = 0
 
 
+## Color de los efectos épicos de este boss.
+func _accent() -> Color:
+	return Color(0.45, 0.9, 0.55)
+
+
 func _impact(at: Vector2, strength: float) -> void:
 	_shake(strength, 0.1 + strength * 0.03)
+	Epic.big_hit(get_parent(), at, _accent(), strength, "syntax", "fxchalk")
 	GameFeel.dust(get_parent(), at, int(4 + strength), Vector2.ZERO, 5.0, Vector2(20 + strength * 3.0, 6))
 	GameFeel.hit_stop(get_tree(), 0.04)
 
 
 func _warn_zone(at: Vector2, dir: Vector2, reach: float, half_angle: float, life: float) -> void:
+	if reach >= 120.0:
+		Epic.charge(get_parent(), global_position + CENTER, _accent(), life * 0.85, 110.0, self, CENTER)
 	var z := BossFx.TeleZone.new()
 	z.dir = dir
 	z.reach = reach
@@ -811,6 +820,10 @@ func _exam_answer(d: Node2D) -> void:
 
 
 func _exam_won() -> void:
+	# clímax con QTE antes del remate; si se falla, vuelve la fase 3 como al perder el duelo
+	if not await _climax():
+		_exam_lost(_tok)
+		return
 	final_victory = true
 	_clear_desks(false)
 	Final.music_final(self, "epic")
@@ -1940,3 +1953,53 @@ class Holo extends Node2D:
 		draw_rect(box, Color(0.12, 0.25, 0.18, 0.9 * a))
 		draw_rect(box, Color(col.r, col.g, col.b, a), false, 2.0)
 		draw_string(f, Vector2(-w * 0.5, 1), text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color(col.r, col.g, col.b, a))
+
+
+# --- CLÍMAX del duelo final (QTE en cámara lenta) -------------------------------------------
+## Golpe del clímax a todos los jugadores (si fallan el QTE de defensa).
+func _climax_hurt(dmg: int, from: Vector2) -> void:
+	for v in _victims():
+		_victim = v
+		hurt_player(dmg, from, true)
+	_victim = null
+
+
+func _climax_clear() -> void:
+	for h in get_tree().get_nodes_in_group("final_shot"):
+		h.queue_free()
+	for h in get_tree().get_nodes_in_group("boss_hazard"):
+		h.queue_free()
+
+
+func _gpos(part: Node2D) -> Vector2:
+	return part.global_position if part and is_instance_valid(part) else global_position + CENTER
+
+
+## PREGUNTA FINAL: responde con los botones en orden y entrega el examen a tiempo.
+func _climax() -> bool:
+	_climax_clear()
+	var p := get_parent()
+	var keys := ["action_primary", "action_secondary", "parry", "roll"]
+	var seq: Array = []
+	for i in 5:
+		seq.append(keys[randi() % keys.size()])
+	var chalk := Color(0.95, 0.95, 0.85)
+	var steps := [
+		{"mode": "sequence", "action": "action_primary", "title": "¡RESPONDE LA PREGUNTA FINAL!", "sub": "Pulsa los botones en orden",
+			"seq": seq, "limit": 4.0, "col": Color(0.5, 1.0, 0.55),
+			"before": func() -> void:
+				Epic.charge(p, _gpos(board), chalk, 0.5, 150.0, board)
+				await get_tree().create_timer(0.3).timeout,
+			"pressed": func() -> void:
+				Epic.burst(p, _gpos(board), chalk, 10, 240.0, 0.3, 0.45)
+				_shake(1.5, 0.06),
+			"ok": func() -> void:
+				Epic.word(p, _gpos(board) + Vector2(0, -80), "¡CORRECTO!", Color(0.5, 1.0, 0.55), 44)},
+		{"mode": "timing", "action": "action_primary", "title": "¡ENTREGA EL EXAMEN!", "sub": "Antes de que suene el timbre", "dur": 1.0, "col": chalk,
+			"ok": func() -> void:
+				Epic.anim(p, "syntax", "fxink", _gpos(board), 1.4)
+				Epic.ring(p, _gpos(board), Color(0.5, 1.0, 0.55), 320.0, 0.5, 12.0)
+				Epic.word(p, _gpos(board) + Vector2(0, -80), "10/10", Color(0.5, 1.0, 0.55), 56)
+				await get_tree().create_timer(0.3).timeout},
+	]
+	return await Epic.climax(self, steps)

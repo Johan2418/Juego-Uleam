@@ -11,6 +11,7 @@ extends CharacterBody2D
 
 const GameFeel := preload("res://scripts/combat/game_feel.gd")
 const CoopBoss := preload("res://scripts/combat/coop_boss.gd")
+const Epic := preload("res://scripts/combat/epic_fx.gd")
 const Barrage := preload("res://scripts/combat/boss_barrage.gd")
 const BossFx := preload("res://scripts/combat/boss_fx.gd")
 const Fx := preload("res://scripts/combat/boss_tex_fx.gd")
@@ -564,13 +565,21 @@ func _rest_arms() -> void:
 	palette.tool = 0
 
 
+## Color de los efectos épicos de este boss.
+func _accent() -> Color:
+	return Color(1.0, 0.3, 1.0)
+
+
 func _impact(at: Vector2, strength: float) -> void:
 	_shake(strength, 0.1 + strength * 0.03)
+	Epic.big_hit(get_parent(), at, _accent(), strength, "tex", "fxglitch")
 	GameFeel.dust(get_parent(), at, int(4 + strength), Vector2.ZERO, 5.0, Vector2(20 + strength * 3.0, 6))
 	GameFeel.hit_stop(get_tree(), 0.04)
 
 
 func _warn_zone(at: Vector2, dir: Vector2, reach: float, half_angle: float, life: float) -> void:
+	if reach >= 120.0:
+		Epic.charge(get_parent(), global_position + CENTER, _accent(), life * 0.85, 110.0, self, CENTER)
 	var z := BossFx.TeleZone.new()
 	z.dir = dir
 	z.reach = reach
@@ -1104,6 +1113,10 @@ func final_back(shot: Node2D) -> void:
 
 
 func _final_won() -> void:
+	# clímax con QTE antes del remate; si se falla, vuelve la fase 3 como al perder el duelo
+	if not await _climax():
+		_final_lost(_tok)
+		return
 	final_victory = true
 	Final.music_final(self, "epic")
 	Final.title(self, "RENDER COMPLETO", Color(0.9, 0.9, 1.0), "Textura cargada: mármol puro", 1.6)
@@ -1913,3 +1926,53 @@ class Lunge extends Final.Shot:
 			draw_circle(Vector2(5 * s, -62), 2.5, Color(1, 1, 1))
 		if strict > 0.0 and not back:
 			draw_arc(Vector2.ZERO, 62.0, 0, TAU, 32, Color(1, 1, 1, 0.5 + 0.5 * absf(sin(t * 18.0))), 2.0)
+
+
+# --- CLÍMAX del duelo final (QTE en cámara lenta) -------------------------------------------
+## Golpe del clímax a todos los jugadores (si fallan el QTE de defensa).
+func _climax_hurt(dmg: int, from: Vector2) -> void:
+	for v in _victims():
+		_victim = v
+		hurt_player(dmg, from, true)
+	_victim = null
+
+
+func _climax_clear() -> void:
+	for h in get_tree().get_nodes_in_group("final_shot"):
+		h.queue_free()
+	for h in get_tree().get_nodes_in_group("boss_hazard"):
+		h.queue_free()
+
+
+func _gpos(part: Node2D) -> Vector2:
+	return part.global_position if part and is_instance_valid(part) else global_position + CENTER
+
+
+## MIRADA FINAL: la estatua se lanza desde la oscuridad; mírala justo a tiempo (fijar) y rómpela.
+func _climax() -> bool:
+	_climax_clear()
+	var p := get_parent()
+	var marble := Color(0.92, 0.9, 0.95)
+	var steps := [
+		{"mode": "timing", "action": "lock_on", "title": "¡MÍRALO A LOS OJOS!", "sub": "Fija la mirada justo cuando se lanza", "dur": 1.1, "col": Color(1, 0.3, 1.0),
+			"before": func() -> void:
+				Epic.charge(p, _gpos(head), Color(1, 0.3, 1.0), 0.5, 140.0, head)
+				await get_tree().create_timer(0.25).timeout,
+			"ok": func() -> void:
+				Epic.flash(p, marble, 0.4, 0.35)
+				Epic.word(p, _gpos(head) + Vector2(0, -70), "¡PETRIFICADO!", marble, 42)
+				GameFeel.flash(rig, 0.3, Color(0.8, 0.8, 0.85)),
+			"fail": func() -> void:
+				_climax_hurt(2, _gpos(head))},
+		{"mode": "mash", "action": "action_primary", "title": "¡ROMPE LA ESTATUA!", "sub": "Machaca antes de que se mueva otra vez",
+			"limit": 3.2, "gain": 0.08, "col": marble,
+			"pressed": func() -> void:
+				Epic.shards(p, _gpos(core) + Vector2(randf_range(-40, 40), randf_range(-40, 40)), marble if randf() < 0.6 else Color(1, 0.2, 1.0), 4, 260.0, 7.0)
+				_shake(2.0, 0.06),
+			"ok": func() -> void:
+				Epic.anim(p, "tex", "fxmarble", _gpos(core), 1.4)
+				Epic.shards(p, _gpos(core), marble, 24, 520.0, 10.0)
+				Epic.word(p, _gpos(core) + Vector2(0, -80), "¡CRASH!", marble, 50)
+				await get_tree().create_timer(0.3).timeout},
+	]
+	return await Epic.climax(self, steps)

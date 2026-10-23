@@ -6,6 +6,7 @@ extends CharacterBody2D
 
 const GameFeel := preload("res://scripts/combat/game_feel.gd")
 const CoopBoss := preload("res://scripts/combat/coop_boss.gd")
+const Epic := preload("res://scripts/combat/epic_fx.gd")
 const Barrage := preload("res://scripts/combat/boss_barrage.gd")
 const BossFx := preload("res://scripts/combat/boss_fx.gd")
 const MinionScript := preload("res://scripts/combat/boss_minion.gd")
@@ -449,14 +450,22 @@ func _rest_pose(time: float = 0.3) -> void:
 
 
 ## Golpe contra el piso: temblor, polvo y una pausa muy corta.
+## Color de los efectos épicos de este boss.
+func _accent() -> Color:
+	return Color(1.0, 0.3, 0.2)
+
+
 func _impact(at: Vector2, strength: float) -> void:
 	_shake(strength, 0.1 + strength * 0.03)
+	Epic.big_hit(get_parent(), at, _accent(), strength, "deadbeef", "fxtoxic")
 	GameFeel.dust(get_parent(), at, int(4 + strength), Vector2.ZERO, 5.0, Vector2(20 + strength * 3.0, 6))
 	GameFeel.hit_stop(get_tree(), 0.04)
 
 
 ## Zona roja en el piso que avisa dónde va a pegar. half_angle = 0 -> círculo.
 func _warn_zone(at: Vector2, dir: Vector2, reach: float, half_angle: float, life: float) -> void:
+	if reach >= 120.0:
+		Epic.charge(get_parent(), global_position + CENTER, _accent(), life * 0.85, 110.0, self, CENTER)
 	var z := BossFx.TeleZone.new()
 	z.dir = dir
 	z.reach = reach
@@ -1299,6 +1308,10 @@ func final_back(shot: Node2D) -> void:
 
 
 func _final_won() -> void:
+	# clímax con QTE antes del remate; si se falla, vuelve la fase 3 como al perder el duelo
+	if not await _climax():
+		_final_lost(_tok)
+		return
 	final_victory = true
 	Final.music_final(self, "epic")
 	await _finisher()
@@ -1899,3 +1912,63 @@ class ArmShot extends Final.Shot:
 			draw_rect(Rect2(-8, -40, 16, 80), Color(0.5, 0.55, 0.6))
 			draw_rect(Rect2(-18, 30, 36, 16), Color(0.8, 0.3, 0.2))
 			draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
+
+# --- CLÍMAX del duelo final (QTE en cámara lenta) -------------------------------------------
+## Golpe del clímax a todos los jugadores (si fallan el QTE de defensa).
+func _climax_hurt(dmg: int, from: Vector2) -> void:
+	for v in _victims():
+		_victim = v
+		hurt_player(dmg, from, true)
+	_victim = null
+
+
+func _climax_clear() -> void:
+	for h in get_tree().get_nodes_in_group("final_shot"):
+		h.queue_free()
+	for h in get_tree().get_nodes_in_group("boss_hazard"):
+		h.queue_free()
+
+
+func _gpos(part: Node2D) -> Vector2:
+	return part.global_position if part and is_instance_valid(part) else global_position + CENTER
+
+
+## VOLCADO DE MEMORIA: el último brazo quedó clavado en el cráneo. Machaca para hundirlo y
+## haz parry a la mordida final del cráneo.
+func _climax() -> bool:
+	_climax_clear()
+	var p := get_parent()
+	var steps := [
+		{"mode": "mash", "action": "action_primary", "title": "¡CLÁVALO HASTA EL FONDO!", "sub": "Machaca para hundir el brazo en el cráneo",
+			"limit": 3.4, "gain": 0.075, "col": _accent(),
+			"before": func() -> void:
+				_face("SIGSEGV", Color(1, 0.3, 0.2), Color(0.15, 0, 0))
+				Epic.charge(p, _gpos(skull), Color(1, 0.3, 0.2), 0.5, 140.0)
+				await get_tree().create_timer(0.35).timeout,
+			"pressed": func() -> void:
+				var at := _gpos(skull)
+				Epic.burst(p, at, Color(1, 0.4, 0.25), 8, 260.0, 0.5, 0.4)
+				Epic.word(p, at + Vector2(randf_range(-70, 70), -40), "0x%X" % randi_range(0x1000, 0xFFFF), Color(0.4, 1.0, 0.4), 20, 0.5)
+				_shake(2.5, 0.08),
+			"ok": func() -> void:
+				var at := _gpos(skull)
+				Epic.shards(p, at, Color(0.85, 0.8, 0.7), 14, 420.0, 8.0)
+				Epic.flash(p, Color(1, 0.3, 0.2), 0.3, 0.35)
+				Epic.word(p, at + Vector2(0, -70), "¡CRACK!", Color(1, 0.9, 0.3), 46)},
+		{"mode": "timing", "action": "parry", "title": "¡PARRY!", "sub": "El cráneo se lanza a morderte", "dur": 1.1, "col": Color(1, 0.4, 0.3),
+			"before": func() -> void:
+				_tw(skull, "position", skull.position + Vector2(0, 70), 0.5)
+				Epic.charge(p, _gpos(skull), Color(1, 0.2, 0.15), 0.45, 100.0, skull),
+			"ok": func() -> void:
+				Epic.anim(p, "deadbeef", "fxcore", _gpos(skull), 1.4)
+				GameFeel.parry_burst(p, _gpos(skull), 60.0)
+				Epic.ring(p, _gpos(skull), Color.WHITE, 260.0, 0.45, 10.0)
+				Epic.word(p, _gpos(skull) + Vector2(0, -60), "¡BLOQUEADO!", Color(0.6, 1.0, 0.6), 36)
+				_tw(skull, "position", _home[skull], 0.3)
+				await get_tree().create_timer(0.3).timeout,
+			"fail": func() -> void:
+				_climax_hurt(2, _gpos(skull))
+				_tw(skull, "position", _home[skull], 0.3)},
+	]
+	return await Epic.climax(self, steps)

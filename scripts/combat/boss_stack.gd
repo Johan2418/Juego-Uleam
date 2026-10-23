@@ -10,6 +10,7 @@ extends CharacterBody2D
 
 const GameFeel := preload("res://scripts/combat/game_feel.gd")
 const CoopBoss := preload("res://scripts/combat/coop_boss.gd")
+const Epic := preload("res://scripts/combat/epic_fx.gd")
 const Barrage := preload("res://scripts/combat/boss_barrage.gd")
 const BossFx := preload("res://scripts/combat/boss_fx.gd")
 const Fx := preload("res://scripts/combat/boss_stack_fx.gd")
@@ -436,13 +437,21 @@ func _rest_arms() -> void:
 	hammer.tool = 0
 
 
+## Color de los efectos épicos de este boss.
+func _accent() -> Color:
+	return Color(1.0, 0.6, 0.15)
+
+
 func _impact(at: Vector2, strength: float) -> void:
 	_shake(strength, 0.1 + strength * 0.03)
+	Epic.big_hit(get_parent(), at, _accent(), strength, "stack", "fxrubble")
 	GameFeel.dust(get_parent(), at, int(4 + strength), Vector2.ZERO, 5.0, Vector2(20 + strength * 3.0, 6))
 	GameFeel.hit_stop(get_tree(), 0.04)
 
 
 func _warn_zone(at: Vector2, dir: Vector2, reach: float, half_angle: float, life: float) -> void:
+	if reach >= 120.0:
+		Epic.charge(get_parent(), global_position + CENTER, _accent(), life * 0.85, 110.0, self, CENTER)
 	var z := BossFx.TeleZone.new()
 	z.dir = dir
 	z.reach = reach
@@ -1126,6 +1135,10 @@ func _final_tower_hit(tw: Fx.Tower) -> void:
 
 
 func _final_won() -> void:
+	# clímax con QTE antes del remate; si se falla, vuelve la fase 3 como al perder el duelo
+	if not await _climax():
+		_final_lost(_tok)
+		return
 	final_victory = true
 	Final.music_final(self, "epic")
 	Final.title(self, "STACK UNDERFLOW", Color(0.5, 1.0, 0.55), "La torre le cayó encima", 1.6)
@@ -1780,3 +1793,56 @@ class Holo extends Node2D:
 		draw_rect(box, Color(0.1, 0.1, 0.1, 0.9 * a))
 		draw_rect(box, Color(0.98, 0.76, 0.12, a), false, 3.0)
 		draw_string(f, Vector2(-w * 0.5, 1), text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color(col.r, col.g, col.b, a))
+
+
+# --- CLÍMAX del duelo final (QTE en cámara lenta) -------------------------------------------
+## Golpe del clímax a todos los jugadores (si fallan el QTE de defensa).
+func _climax_hurt(dmg: int, from: Vector2) -> void:
+	for v in _victims():
+		_victim = v
+		hurt_player(dmg, from, true)
+	_victim = null
+
+
+func _climax_clear() -> void:
+	for h in get_tree().get_nodes_in_group("final_shot"):
+		h.queue_free()
+	for h in get_tree().get_nodes_in_group("boss_hazard"):
+		h.queue_free()
+
+
+func _gpos(part: Node2D) -> Vector2:
+	return part.global_position if part and is_instance_valid(part) else global_position + CENTER
+
+
+## DERRUMBE TOTAL: empuja la torre sobre él y rueda para que no te caiga encima.
+func _climax() -> bool:
+	_climax_clear()
+	var p := get_parent()
+	var orange := Color(1.0, 0.6, 0.15)
+	var steps := [
+		{"mode": "mash", "action": "action_primary", "title": "¡EMPUJA LA TORRE!", "sub": "Que se le venga encima",
+			"limit": 3.4, "gain": 0.075, "col": orange,
+			"before": func() -> void:
+				await get_tree().create_timer(0.3).timeout,
+			"pressed": func() -> void:
+				GameFeel.dust(p, global_position + Vector2(randf_range(-120, 120), 10), 3, Vector2.ZERO, 4.0, Vector2(20, 6))
+				Epic.burst(p, _gpos(head), orange, 5, 220.0, 0.8, 0.4)
+				_shake(2.5, 0.08),
+			"ok": func() -> void:
+				Epic.word(p, _gpos(head) + Vector2(0, -80), "¡SE CAE!", orange, 46)},
+		{"mode": "timing", "action": "roll", "title": "¡RUEDA!", "sub": "¡Se viene todo abajo!", "dur": 1.0, "col": orange,
+			"before": func() -> void:
+				for i in 6:
+					Epic.shards(p, global_position + Vector2(randf_range(-260, 260), randf_range(-60, 140)), Color(0.7, 0.68, 0.6), 4, 160.0, 10.0),
+			"ok": func() -> void:
+				Epic.anim(p, "stack", "fxweld", _gpos(head), 1.4)
+				Epic.shards(p, _gpos(head), Color(0.75, 0.7, 0.6), 20, 520.0, 12.0)
+				Epic.ring(p, global_position, orange, 460.0, 0.6, 16.0)
+				Epic.word(p, _gpos(head) + Vector2(0, -80), "¡DERRUMBE!", orange, 50)
+				_shake(10.0, 0.4)
+				await get_tree().create_timer(0.3).timeout,
+			"fail": func() -> void:
+				_climax_hurt(2, global_position)},
+	]
+	return await Epic.climax(self, steps)

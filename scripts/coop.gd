@@ -128,6 +128,8 @@ class View extends CanvasLayer:
 			cam.position = pos[i]
 			var src: Camera2D = cams[i]
 			cam.offset = src.offset if src else Vector2.ZERO
+			if not split and c1 and c2:
+				cam.offset = c1.offset + c2.offset   # juntos: se ven los sacudones de los dos
 		_mat.set_shader_parameter("normal", n)
 		_mat.set_shader_parameter("split", 1.0 if split else 0.0)
 		_mat.set_shader_parameter("line", _line)

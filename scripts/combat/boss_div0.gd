@@ -10,6 +10,7 @@ extends CharacterBody2D
 
 const GameFeel := preload("res://scripts/combat/game_feel.gd")
 const CoopBoss := preload("res://scripts/combat/coop_boss.gd")
+const Epic := preload("res://scripts/combat/epic_fx.gd")
 const Barrage := preload("res://scripts/combat/boss_barrage.gd")
 const BossFx := preload("res://scripts/combat/boss_fx.gd")
 const Fx := preload("res://scripts/combat/boss_div0_fx.gd")
@@ -579,13 +580,21 @@ func _rest_arms() -> void:
 	calc.tool = 0
 
 
+## Color de los efectos épicos de este boss.
+func _accent() -> Color:
+	return Color(1.0, 0.78, 0.2)
+
+
 func _impact(at: Vector2, strength: float) -> void:
 	_shake(strength, 0.1 + strength * 0.03)
+	Epic.big_hit(get_parent(), at, _accent(), strength, "div0", "fxcoins")
 	GameFeel.dust(get_parent(), at, int(4 + strength), Vector2.ZERO, 5.0, Vector2(20 + strength * 3.0, 6))
 	GameFeel.hit_stop(get_tree(), 0.04)
 
 
 func _warn_zone(at: Vector2, dir: Vector2, reach: float, half_angle: float, life: float) -> void:
+	if reach >= 120.0:
+		Epic.charge(get_parent(), global_position + CENTER, _accent(), life * 0.85, 110.0, self, CENTER)
 	var z := BossFx.TeleZone.new()
 	z.dir = dir
 	z.reach = reach
@@ -1153,6 +1162,10 @@ func final_back(shot: Node2D) -> void:
 
 
 func _final_won() -> void:
+	# clímax con QTE antes del remate; si se falla, vuelve la fase 3 como al perder el duelo
+	if not await _climax():
+		_final_lost(_tok)
+		return
 	final_victory = true
 	for h in get_tree().get_nodes_in_group("final_shot"):
 		h.queue_free()
@@ -1995,3 +2008,57 @@ class Bell extends Node2D:
 		draw_string(f, Vector2(-80, 34), "CIERRE EN %.1f s" % maxf(0.0, left), HORIZONTAL_ALIGNMENT_CENTER, 160, 15, Color(1, 0.4, 0.3) if left < 5.0 else Color(1, 0.9, 0.6))
 		draw_string_outline(f, Vector2(-80, 54), "ACCIÓN: %d" % int(price), HORIZONTAL_ALIGNMENT_CENTER, 160, 15, 4, Color(0, 0, 0, 0.9))
 		draw_string(f, Vector2(-80, 54), "ACCIÓN: %d" % int(price), HORIZONTAL_ALIGNMENT_CENTER, 160, 15, Color(0.6, 1, 0.6))
+
+
+# --- CLÍMAX del duelo final (QTE en cámara lenta) -------------------------------------------
+## Golpe del clímax a todos los jugadores (si fallan el QTE de defensa).
+func _climax_hurt(dmg: int, from: Vector2) -> void:
+	for v in _victims():
+		_victim = v
+		hurt_player(dmg, from, true)
+	_victim = null
+
+
+func _climax_clear() -> void:
+	for h in get_tree().get_nodes_in_group("final_shot"):
+		h.queue_free()
+	for h in get_tree().get_nodes_in_group("boss_hazard"):
+		h.queue_free()
+
+
+func _gpos(part: Node2D) -> Vector2:
+	return part.global_position if part and is_instance_valid(part) else global_position + CENTER
+
+
+## CRASH DEL MERCADO: vende sin parar hasta hundir la acción y haz parry al lingote de oro final.
+func _climax() -> bool:
+	_climax_clear()
+	var p := get_parent()
+	var gold := Color(1.0, 0.8, 0.25)
+	var steps := [
+		{"mode": "mash", "action": "action_primary", "title": "¡VENDE! ¡VENDE! ¡VENDE!", "sub": "Hunde la acción a cero",
+			"limit": 3.4, "gain": 0.075, "col": Color(1, 0.35, 0.3),
+			"before": func() -> void:
+				Epic.flash(p, Color(1, 0.2, 0.2), 0.2, 0.4)
+				await get_tree().create_timer(0.3).timeout,
+			"pressed": func() -> void:
+				var at := _gpos(ticker)
+				Epic.word(p, at + Vector2(randf_range(-90, 90), randf_range(-60, 0)), "-SELL", Color(1, 0.3, 0.25), 22, 0.5)
+				Epic.burst(p, _gpos(vault), gold, 6, 260.0, 0.8, 0.5)
+				_shake(2.0, 0.06),
+			"ok": func() -> void:
+				Epic.word(p, _gpos(ticker) + Vector2(0, -60), "¡CRASH!", Color(1, 0.3, 0.25), 50)
+				Epic.flash(p, Color(1, 0.2, 0.2), 0.35, 0.4)},
+		{"mode": "timing", "action": "parry", "title": "¡PARRY AL LINGOTE DE ORO!", "sub": "Su última inversión", "dur": 1.1, "col": gold,
+			"before": func() -> void:
+				Epic.charge(p, _gpos(vault), gold, 0.5, 140.0, vault),
+			"ok": func() -> void:
+				Epic.anim(p, "div0", "fxcrash", _gpos(vault), 1.4)
+				GameFeel.parry_burst(p, _gpos(vault), 56.0)
+				Epic.shards(p, _gpos(vault), gold, 16, 460.0, 8.0)
+				Epic.word(p, _gpos(vault) + Vector2(0, -70), "¡QUIEBRA!", gold, 48)
+				await get_tree().create_timer(0.3).timeout,
+			"fail": func() -> void:
+				_climax_hurt(2, _gpos(vault))},
+	]
+	return await Epic.climax(self, steps)

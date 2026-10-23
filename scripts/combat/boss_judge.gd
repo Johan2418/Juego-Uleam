@@ -10,6 +10,7 @@ extends CharacterBody2D
 
 const GameFeel := preload("res://scripts/combat/game_feel.gd")
 const CoopBoss := preload("res://scripts/combat/coop_boss.gd")
+const Epic := preload("res://scripts/combat/epic_fx.gd")
 const Barrage := preload("res://scripts/combat/boss_barrage.gd")
 const BossFx := preload("res://scripts/combat/boss_fx.gd")
 const Fx := preload("res://scripts/combat/boss_judge_fx.gd")
@@ -401,8 +402,14 @@ func _rest_arms() -> void:
 	hand.tool = 0
 
 
+## Color de los efectos épicos de este boss.
+func _accent() -> Color:
+	return Color(0.9, 0.3, 0.3)
+
+
 func _impact(at: Vector2, strength: float) -> void:
 	_shake(strength, 0.1 + strength * 0.03)
+	Epic.big_hit(get_parent(), at, _accent(), strength, "judge", "fxgavel")
 	GameFeel.dust(get_parent(), at, int(4 + strength), Vector2.ZERO, 5.0, Vector2(20 + strength * 3.0, 6))
 	GameFeel.hit_stop(get_tree(), 0.04)
 
@@ -422,6 +429,8 @@ func _gavel_hit(tok: int, up_time: float = 0.25) -> bool:
 
 
 func _warn_zone(at: Vector2, dir: Vector2, reach: float, half_angle: float, life: float) -> void:
+	if reach >= 120.0:
+		Epic.charge(get_parent(), global_position + CENTER, _accent(), life * 0.85, 110.0, self, CENTER)
 	var z := BossFx.TeleZone.new()
 	z.dir = dir
 	z.reach = reach
@@ -860,6 +869,10 @@ func _swing(seal: Node2D) -> void:
 
 ## Ganaste el duelo: el sello lo golpea, ¡CULPABLE! y cae.
 func _final_win() -> void:
+	# clímax con QTE antes del remate; si se falla, vuelve la fase 3 como al perder el duelo
+	if not await _climax():
+		_final_fail(_tok)
+		return
 	final_victory = true
 	_music_final("epic")
 	GameFeel.flash(rig, 0.5, Color(0.7, 1.0, 0.7))
@@ -2039,3 +2052,57 @@ class Glint extends Node2D:
 		draw_line(Vector2(-r, 0), Vector2(r, 0), Color(1, 1, 0.9, 0.9), 2.0)
 		draw_line(Vector2(0, -r), Vector2(0, r), Color(1, 1, 0.9, 0.9), 2.0)
 		draw_circle(Vector2.ZERO, r * 0.25, Color(1, 1, 1, 0.9))
+
+
+# --- CLÍMAX del duelo final (QTE en cámara lenta) -------------------------------------------
+## Golpe del clímax a todos los jugadores (si fallan el QTE de defensa).
+func _climax_hurt(dmg: int, from: Vector2) -> void:
+	for v in _victims():
+		_victim = v
+		hurt_player(dmg, from, true)
+	_victim = null
+
+
+func _climax_clear() -> void:
+	for h in get_tree().get_nodes_in_group("final_shot"):
+		h.queue_free()
+	for h in get_tree().get_nodes_in_group("boss_hazard"):
+		h.queue_free()
+
+
+func _gpos(part: Node2D) -> Vector2:
+	return part.global_position if part and is_instance_valid(part) else global_position + CENTER
+
+
+## ¡OBJECIÓN!: peloteo final a toda velocidad (parry en cada sello) y la objeción que rompe el escudo.
+func _climax() -> bool:
+	_climax_clear()
+	var p := get_parent()
+	var red := Color(1.0, 0.35, 0.3)
+	var steps := [
+		{"mode": "rhythm", "action": "parry", "title": "¡PELOTEO FINAL!", "sub": "Parry a cada sello", "beats": [1.0, 1.55, 2.0, 2.35, 2.65],
+			"window": 0.16, "col": red,
+			"before": func() -> void:
+				await get_tree().create_timer(0.3).timeout,
+			"pressed": func() -> void:
+				_tw(gavel, "rotation", PI * 0.95 if randf() < 0.5 else 0.2, 0.08)
+				GameFeel.parry_burst(p, _gpos(hand), 30.0)
+				Epic.ring(p, _gpos(hand), red, 160.0, 0.3, 6.0)
+				_shake(2.5, 0.08),
+			"ok": func() -> void:
+				pass},
+		{"mode": "timing", "action": "parry", "title": "¡OBJECIÓN!", "sub": "", "dur": 0.95, "col": red,
+			"before": func() -> void:
+				Epic.charge(p, _gpos(core), red, 0.45, 160.0, core),
+			"ok": func() -> void:
+				Epic.anim(p, "judge", "fxseal", _gpos(core), 1.4)
+				Epic.flash(p, Color(1, 1, 1), 0.5, 0.4)
+				Epic.word(p, _gpos(core) + Vector2(0, -90), "¡OBJECIÓN!", red, 64, 1.2)
+				Epic.shards(p, _gpos(core), Color(0.5, 0.75, 1.0), 18, 460.0, 9.0)
+				Epic.ring(p, _gpos(core), Color.WHITE, 400.0, 0.5, 14.0)
+				_shake(9.0, 0.35)
+				await get_tree().create_timer(0.4).timeout,
+			"fail": func() -> void:
+				_climax_hurt(2, _gpos(core))},
+	]
+	return await Epic.climax(self, steps)

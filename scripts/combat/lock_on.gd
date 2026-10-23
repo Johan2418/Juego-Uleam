@@ -220,7 +220,11 @@ func _update_camera() -> void:
 	if cam == null:
 		return
 	var want := Vector2.ZERO
-	if active():
+	if cam.has_meta("epic_focus"):
+		# cinemática (clímax de los duelos finales): la cámara se corre hacia el boss
+		var fp: Vector2 = cam.get_meta("epic_focus")
+		want = ((fp - player.global_position) * 0.55).limit_length(320.0)
+	elif active():
 		want = ((point() - player.global_position) * CAM_PULL).limit_length(CAM_MAX)
 	cam.position = cam.position.lerp(want, 0.08)
 

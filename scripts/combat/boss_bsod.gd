@@ -9,6 +9,7 @@ extends CharacterBody2D
 
 const GameFeel := preload("res://scripts/combat/game_feel.gd")
 const CoopBoss := preload("res://scripts/combat/coop_boss.gd")
+const Epic := preload("res://scripts/combat/epic_fx.gd")
 const Barrage := preload("res://scripts/combat/boss_barrage.gd")
 const BossFx := preload("res://scripts/combat/boss_fx.gd")
 const Fx := preload("res://scripts/combat/boss_bsod_fx.gd")
@@ -488,13 +489,21 @@ func _rest_arms() -> void:
 	scalpel.saw = false
 
 
+## Color de los efectos épicos de este boss.
+func _accent() -> Color:
+	return Color(0.3, 0.6, 1.0)
+
+
 func _impact(at: Vector2, strength: float) -> void:
 	_shake(strength, 0.1 + strength * 0.03)
+	Epic.big_hit(get_parent(), at, _accent(), strength, "bsod", "fxshock")
 	GameFeel.dust(get_parent(), at, int(4 + strength), Vector2.ZERO, 5.0, Vector2(20 + strength * 3.0, 6))
 	GameFeel.hit_stop(get_tree(), 0.04)
 
 
 func _warn_zone(at: Vector2, dir: Vector2, reach: float, half_angle: float, life: float) -> void:
+	if reach >= 120.0:
+		Epic.charge(get_parent(), global_position + CENTER, _accent(), life * 0.85, 110.0, self, CENTER)
 	var z := BossFx.TeleZone.new()
 	z.dir = dir
 	z.reach = reach
@@ -1158,6 +1167,10 @@ func final_back(shot: Node2D) -> void:
 
 
 func _final_won() -> void:
+	# clímax con QTE antes del remate; si se falla, vuelve la fase 3 como al perder el duelo
+	if not await _climax():
+		_final_lost(_tok)
+		return
 	final_victory = true
 	_final_bpm = 0.0
 	Final.music_final(self, "epic")
@@ -2003,3 +2016,59 @@ class Paddle extends Node2D:
 			var p1 := p0 + Vector2.from_angle(a + randf_range(-0.6, 0.6)) * randf_range(10.0, 26.0 + 16.0 * _zap)
 			var mid := (p0 + p1) * 0.5 + Vector2(randf_range(-5, 5), randf_range(-5, 5))
 			draw_polyline(PackedVector2Array([p0, mid, p1]), Color(0.75, 0.9, 1.0, 0.9), 1.5)
+
+
+# --- CLÍMAX del duelo final (QTE en cámara lenta) -------------------------------------------
+## Golpe del clímax a todos los jugadores (si fallan el QTE de defensa).
+func _climax_hurt(dmg: int, from: Vector2) -> void:
+	for v in _victims():
+		_victim = v
+		hurt_player(dmg, from, true)
+	_victim = null
+
+
+func _climax_clear() -> void:
+	for h in get_tree().get_nodes_in_group("final_shot"):
+		h.queue_free()
+	for h in get_tree().get_nodes_in_group("boss_hazard"):
+		h.queue_free()
+
+
+func _gpos(part: Node2D) -> Vector2:
+	return part.global_position if part and is_instance_valid(part) else global_position + CENTER
+
+
+## DESFIBRILACIÓN: carga las paletas y descarga en cada latido; la última es la descarga final.
+func _climax() -> bool:
+	_climax_clear()
+	var p := get_parent()
+	var blue := Color(0.4, 0.75, 1.0)
+	var steps := [
+		{"mode": "rhythm", "action": "parry", "title": "¡DESCARGA EN EL LATIDO!", "sub": "Pulsa cuando cada latido llega al botón",
+			"beats": [1.0, 1.6, 2.2, 2.8], "window": 0.17, "col": blue,
+			"before": func() -> void:
+				Epic.charge(p, _gpos(heart), blue, 0.6, 160.0, heart)
+				await get_tree().create_timer(0.3).timeout,
+			"pressed": func() -> void:
+				var at := _gpos(heart)
+				Epic.ring(p, at, blue, 200.0, 0.35, 8.0)
+				Epic.burst(p, at, Color(0.7, 0.9, 1.0), 12, 320.0, 0.3, 0.4)
+				Epic.flash(p, blue, 0.15, 0.2)
+				GameFeel.flash(rig, 0.1, Color(0.6, 0.85, 1.0))
+				_shake(3.0, 0.1),
+			"ok": func() -> void:
+				Epic.word(p, _gpos(heart) + Vector2(0, -60), "¡RITMO!", Color(0.6, 1.0, 0.7), 36)},
+		{"mode": "timing", "action": "action_primary", "title": "¡DESCARGA FINAL!", "sub": "", "dur": 1.0, "col": blue,
+			"before": func() -> void:
+				Epic.charge(p, _gpos(heart), Color(1, 1, 1), 0.5, 200.0, heart),
+			"ok": func() -> void:
+				Epic.anim(p, "bsod", "fxpulse", _gpos(heart), 1.4)
+				Epic.whiteout(p, Color(0.75, 0.9, 1.0), 0.6, 0.1)
+				Epic.ring(p, _gpos(heart), blue, 420.0, 0.6, 16.0)
+				Epic.shards(p, _gpos(heart), Color(0.85, 0.2, 0.25), 12, 380.0, 7.0)
+				Epic.word(p, _gpos(heart) + Vector2(0, -70), "¡DESCARGA!", Color(0.7, 0.9, 1.0), 48)
+				await get_tree().create_timer(0.4).timeout,
+			"fail": func() -> void:
+				_climax_hurt(2, _gpos(heart))},
+	]
+	return await Epic.climax(self, steps)
