@@ -18,6 +18,11 @@ const MUSIC_FALLBACK := "res://assets/audio/hall/hall_ambient.ogg"
 const ROOM := Rect2(-700, -340, 1400, 660)
 const DOOR_POS := Vector2(0, -340)
 const SKIP_HOLD := 1.0
+## Casillero de técnicas (igual que el del salón): clase y técnicas equipadas.
+const Hall := preload("res://scripts/combat/boss_hall.gd")
+const MENU_SCENE := "res://scenes/character_creator.tscn"
+const SELF_SCENE := "res://scenes/training.tscn"
+const LOCKER_POS := Vector2(-560, 250)
 
 ## [id, título, instrucción con {acción} para el botón, meta]
 const LESSONS := [
@@ -40,6 +45,8 @@ var _going := false
 var _t := 0.0
 var _door_near := false
 var _skip := 0.0
+var _locker: Node2D
+var _locker_near := false
 var _ui: Ui
 var _sparring: Node2D
 var _dummies: Array = []
@@ -56,6 +63,9 @@ func _ready() -> void:
 	floor_node.room = self
 	add_child(floor_node)
 	_build_walls()
+	_locker = Hall.Locker.new()
+	_locker.position = LOCKER_POS
+	add_child(_locker)
 	var door := Door.new()
 	door.room = self
 	door.position = DOOR_POS
@@ -193,6 +203,13 @@ func _process(delta: float) -> void:
 			"lock":
 				if bool(p.call("locked_on")):
 					_advance(1)
+	# casillero de técnicas
+	_locker_near = false
+	for p in players:
+		if is_instance_valid(p) and (p as Node2D).global_position.distance_to(LOCKER_POS) < 85.0:
+			_locker_near = true
+	if _locker:
+		_locker.set("near", _locker_near and not _going)
 	# puerta al salón
 	_door_near = false
 	for p in players:
@@ -207,6 +224,17 @@ func _process(delta: float) -> void:
 			_go_hall()
 	else:
 		_skip = 0.0
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	if _going or event.is_echo() or not _locker_near:
+		return
+	if event.is_action_pressed("interact"):
+		get_viewport().set_input_as_handled()
+		_going = true
+		var menu_script = load("res://scripts/ui/character_menu.gd")
+		menu_script.return_scene = SELF_SCENE
+		get_tree().change_scene_to_file(MENU_SCENE)
 
 
 func _on_dummy_hit(_amount: int, _from: Vector2) -> void:

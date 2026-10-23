@@ -391,6 +391,8 @@ class Overlay extends Node2D:
 	func _draw() -> void:
 		var t: float = screen.get("_t")
 		Style.title(self, Vector2(640, 60), "ELIGE TU PERSONAJE", 50, Color(1.0, 0.9, 0.2), Color(0.12, 0.08, 0.02), HORIZONTAL_ALIGNMENT_CENTER, 1100)
+		var hint := "Técnicas: CASILLERO del entrenamiento y del salón"
+		Style.title(self, Vector2(1262 - Style.text_w(hint, 13), 30), hint, 13, Color(0.85, 0.9, 1.0), Color(0.03, 0.03, 0.06), HORIZONTAL_ALIGNMENT_LEFT, -1, 0.0)
 		var pl: Array = screen.get("_pl")
 		var coop: bool = GameState.coop
 		for k in pl.size():

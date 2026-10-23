@@ -202,6 +202,8 @@ func _ready() -> void:
 	_lock_player(true)
 	if not retry:
 		_dim.color = Color(0.5, 0.5, 0.6)
+	if not retry:
+		_start_rumble()
 	boss.call("start_intro", retry)
 
 
@@ -361,47 +363,95 @@ func _show_banner(text: String, col: Color, hold: float = 1.2) -> void:
 	tw.tween_property(_banner, "modulate:a", 0.0, 0.4)
 
 
-## Pantalla de presentación: franja tipo terminal que escribe letra por letra.
+## Pantalla de presentación épica: dos franjas del color del boss entran cruzadas, se escribe la línea
+## de terminal y el NOMBRE cae de golpe (letra arcade en cursiva) con destello, temblor y sonido.
 func _title_card() -> void:
-	var layer := CanvasLayer.new()
-	layer.layer = 6
-	add_child(layer)
-	var strip := ColorRect.new()
-	strip.color = Color(0.02, 0.03, 0.03, 0.92)
-	strip.size = Vector2(1280, 180)
-	strip.position = Vector2(-1280, 250)
-	layer.add_child(strip)
-	var lines := [
-		[BOSSES[boss_kind]["title"][0], 44, Color(0.45, 1.0, 0.5)],
-		[BOSSES[boss_kind]["title"][1], 20, Color(1, 0.6, 0.4)],
-		[BOSSES[boss_kind]["title"][2], 16, Color(0.75, 0.75, 0.75)],
-	]
-	var labels: Array[Label] = []
-	var y := 30.0
-	for l in lines:
-		var lb := Label.new()
-		lb.text = l[0]
-		lb.position = Vector2(140, y)
-		lb.add_theme_font_size_override("font_size", l[1])
-		lb.add_theme_color_override("font_color", l[2])
-		lb.visible_ratio = 0.0
-		strip.add_child(lb)
-		labels.append(lb)
-		y += float(l[1]) + 18.0
-	var tw := create_tween()
-	tw.tween_property(strip, "position:x", 0.0, 0.25).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-	tw.tween_property(labels[0], "visible_ratio", 1.0, 0.6)
-	tw.tween_property(labels[1], "visible_ratio", 1.0, 0.45)
-	tw.tween_property(labels[2], "visible_ratio", 1.0, 0.35)
-	tw.tween_interval(0.9)
-	tw.tween_property(strip, "position:x", 1280.0, 0.25).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
-	await tw.finished
-	layer.queue_free()
+	var card := TitleCard.new()
+	card.name_text = str(BOSSES[boss_kind]["name"])
+	card.terminal = str(BOSSES[boss_kind]["title"][0])
+	card.subtitle = str(BOSSES[boss_kind]["title"][1])
+	card.faculty = str(BOSSES[boss_kind]["title"][2])
+	card.accent = _accent()
+	add_child(card)
+	await get_tree().create_timer(TitleCard.SLAM_AT - 0.42).timeout
+	play_sfx("title_slam", 0.0)
+	await get_tree().create_timer(0.42).timeout
+	Epic.flash(self, Color.WHITE, 0.45, 0.35)
+	Epic.speed_lines(self, 0.5, Color(_accent().lightened(0.5), 0.6))
+	Epic.cam_punch(get_tree(), 0.06, 0.3)
+	if is_instance_valid(player):
+		var cam := player.get_node_or_null("Camera2D") as Camera2D
+		if cam:
+			var tw := cam.create_tween()
+			for k in 8:
+				var st := 9.0 * (1.0 - k / 8.0)
+				tw.tween_property(cam, "offset", Vector2(randf_range(-st, st), randf_range(-st, st)), 0.035)
+			tw.tween_property(cam, "offset", Vector2.ZERO, 0.04)
+	await card.finished
+
+
+# --- Sonidos (grito del boss, golpe de la tarjeta, tensión de la intro) ----------------------
+
+var _rumble: AudioStreamPlayer
+var _last_roar := -10000
+var _roared := false
+
+
+func play_sfx(sfx: String, db: float = 0.0) -> AudioStreamPlayer:
+	var path: String = MUSIC_DIR + sfx + ".ogg"
+	if not ResourceLoader.exists(path):
+		return null
+	var p := AudioStreamPlayer.new()
+	p.stream = load(path)
+	p.volume_db = db
+	add_child(p)
+	p.play()
+	p.finished.connect(p.queue_free)
+	return p
+
+
+## Grito del boss (presentación y cambio de fase). Lo llaman también los efectos de "grito" (boss_roar.gd).
+func boss_roar() -> void:
+	var now := Time.get_ticks_msec()
+	if now - _last_roar < 2500:
+		return
+	_last_roar = now
+	_roared = true
+	_stop_rumble(0.4)
+	play_sfx(boss_kind + "_roar", 1.0)
+
+
+## Zumbido de tensión mientras el boss se presenta (antes había silencio).
+func _start_rumble() -> void:
+	var path: String = MUSIC_DIR + "intro_rumble.ogg"
+	if not ResourceLoader.exists(path):
+		return
+	var st: AudioStream = load(path)
+	if st is AudioStreamOggVorbis:
+		(st as AudioStreamOggVorbis).loop = true
+	_rumble = AudioStreamPlayer.new()
+	_rumble.stream = st
+	_rumble.volume_db = -36.0
+	add_child(_rumble)
+	_rumble.play()
+	create_tween().tween_property(_rumble, "volume_db", -9.0, 1.6)
+
+
+func _stop_rumble(time: float = 0.8) -> void:
+	if _rumble and is_instance_valid(_rumble):
+		var r := _rumble
+		_rumble = null
+		var tw := r.create_tween()
+		tw.tween_property(r, "volume_db", -50.0, time)
+		tw.tween_callback(r.queue_free)
 
 
 # --- Eventos ----------------------------------------------------------------------
 
 func _on_intro_done() -> void:
+	if not _roared:
+		boss_roar()
+	_stop_rumble(0.6)
 	if not retry:
 		await _title_card()
 	_start_fight()
@@ -517,6 +567,8 @@ func _accent() -> Color:
 
 func _on_phase(phase: int, title: String) -> void:
 	_phase_label.text = "Fase %d/3" % phase
+	if phase >= 2:
+		boss_roar()
 	# cambio de fase épico: destello, onda doble, chispas, líneas de velocidad y zoom
 	if phase >= 2 and boss_kind != "sudo":
 		var c := _boss_core()
@@ -1127,3 +1179,94 @@ class ReviveFx extends Node2D:
 			var msg := "¡LEVÁNTALO!" if k <= 0.0 else "%d%%" % int(k * 100)
 			draw_string_outline(f, c + Vector2(-60, -32 + sin(t * 6.0) * 2.0), msg, HORIZONTAL_ALIGNMENT_CENTER, 120, 15, 4, Color.BLACK)
 			draw_string(f, c + Vector2(-60, -32 + sin(t * 6.0) * 2.0), msg, HORIZONTAL_ALIGNMENT_CENTER, 120, 15, Color(1.0, 0.9, 0.4))
+
+
+## Tarjeta de presentación épica (la dibuja con la letra arcade de la portada).
+class TitleCard extends CanvasLayer:
+	const Style := preload("res://scripts/ui/ui_style.gd")
+	const SLAM_AT := 0.62
+	const OUT_AT := 2.9
+	const END := 3.3
+	signal finished
+	var name_text := "BOSS"
+	var terminal := ""
+	var subtitle := ""
+	var faculty := ""
+	var accent := Color(1, 0.4, 0.3)
+	var t := 0.0
+	var _c: Control
+	var _done := false
+
+	func _ready() -> void:
+		layer = 7
+		_c = Control.new()
+		_c.size = Vector2(1280, 720)
+		_c.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_c.draw.connect(_paint)
+		add_child(_c)
+
+	func _process(delta: float) -> void:
+		t += delta
+		if t >= END and not _done:
+			_done = true
+			finished.emit()
+			queue_free()
+		_c.queue_redraw()
+
+	static func _ease_out(k: float) -> float:
+		k = clampf(k, 0.0, 1.0)
+		return 1.0 - pow(1.0 - k, 3.0)
+
+	func _paint() -> void:
+		var out := clampf((t - OUT_AT) / (END - OUT_AT), 0.0, 1.0)
+		# oscurece la arena
+		var dark := clampf(t / 0.25, 0.0, 1.0) * (1.0 - out)
+		_c.draw_rect(Rect2(0, 0, 1280, 720), Color(0, 0, 0, 0.5 * dark))
+		# franjas cruzadas que entran desde los lados
+		var kin := _ease_out(t / 0.28)
+		var y0 := 250.0
+		var band := Rect2(-200 + (1.0 - kin) * -1500.0 + out * 1700.0, y0, 1680, 190)
+		_c.draw_colored_polygon(Style.slanted(band, 60), Color(0.03, 0.02, 0.06, 0.9))
+		var top := Rect2(-200 + (1.0 - kin) * 1700.0 - out * 1700.0, y0 - 14, 1680, 12)
+		var bot := Rect2(-200 + (1.0 - kin) * -1700.0 + out * 1700.0, y0 + 192, 1680, 12)
+		_c.draw_colored_polygon(Style.slanted(top, 8), accent)
+		_c.draw_colored_polygon(Style.slanted(bot, 8), accent)
+		# rayas diagonales que corren dentro de la franja
+		for i in 14:
+			var x := fmod(t * 600.0 + i * 140.0, 1680.0) - 200.0 + band.position.x + 200.0
+			_c.draw_line(Vector2(x, y0 + 4), Vector2(x - 60, y0 + 186), Color(accent, 0.07), 14.0)
+		# línea de terminal que se escribe
+		if t > 0.25 and terminal != "":
+			var n := clampi(int((t - 0.25) / 0.02), 0, terminal.length())
+			var tt := terminal.substr(0, n) + ("_" if fmod(t, 0.4) < 0.2 and n < terminal.length() else "")
+			_c.draw_string(ThemeDB.fallback_font, Vector2(150 + out * 600.0, y0 + 30), tt, HORIZONTAL_ALIGNMENT_LEFT, -1, 18, Color(0.45, 1.0, 0.5, 1.0 - out))
+		# NOMBRE: cae desde grande y golpea
+		if t > SLAM_AT - 0.2:
+			var k := clampf((t - (SLAM_AT - 0.2)) / 0.2, 0.0, 1.0)
+			var sc := lerpf(3.0, 1.0, k * k)
+			var a := clampf(k * 1.5, 0.0, 1.0) * (1.0 - out)
+			var size := 104
+			var w := Style.text_w(name_text, size)
+			if w > 1080.0:
+				size = int(size * 1080.0 / w)
+			var c := Vector2(640, y0 + 82 + size * 0.36)
+			var hit := clampf(1.0 - (t - SLAM_AT) / 0.5, 0.0, 1.0) if t >= SLAM_AT else 0.0
+			var jitter := Vector2(randf_range(-6, 6), randf_range(-3, 3)) * hit
+			var stretch := Vector2(1.0 + out * 1.4, 1.0 - out * 0.6)
+			var base := Transform2D(0.0, Vector2(sc, sc) * stretch, 0.0, c + jitter)
+			# copias desfasadas (rojo / cian) al golpear: efecto glitch
+			if hit > 0.0:
+				Style.title(_c, Vector2(-7 * hit, 0), name_text, size, Color(1, 0.2, 0.3, 0.6 * hit * a), Color(0, 0, 0, 0), HORIZONTAL_ALIGNMENT_CENTER, 1200, -0.18, base)
+				Style.title(_c, Vector2(7 * hit, 0), name_text, size, Color(0.2, 0.9, 1.0, 0.6 * hit * a), Color(0, 0, 0, 0), HORIZONTAL_ALIGNMENT_CENTER, 1200, -0.18, base)
+			Style.title(_c, Vector2.ZERO, name_text, size, Color(accent.lightened(0.35), a), Color(0.04, 0.02, 0.06, a), HORIZONTAL_ALIGNMENT_CENTER, 1200, -0.18, base)
+			_c.draw_set_transform(Vector2.ZERO)
+			# destello blanco sobre las letras al golpear
+			if hit > 0.6:
+				_c.draw_rect(Rect2(0, y0, 1280, 190), Color(1, 1, 1, (hit - 0.6) * 1.2))
+		# subtítulo que entra desde la derecha y facultad
+		if t > 0.85 and subtitle != "":
+			var ks := _ease_out((t - 0.85) / 0.25)
+			Style.title(_c, Vector2(640 + (1.0 - ks) * 700.0 - out * 900.0, y0 + 168), subtitle, 26, Color(1, 1, 1, 1.0 - out), Color(0.04, 0.02, 0.06, 1.0 - out), HORIZONTAL_ALIGNMENT_CENTER, 1100, -0.12)
+		if t > 1.1 and faculty != "":
+			var kf := clampf((t - 1.1) / 0.35, 0.0, 1.0) * (1.0 - out)
+			Style.title(_c, Vector2(640, y0 + 232), faculty, 18, Color(accent.lightened(0.5), kf), Color(0, 0, 0, 0.8 * kf), HORIZONTAL_ALIGNMENT_CENTER, 1200, 0.0)

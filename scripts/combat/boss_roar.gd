@@ -30,6 +30,9 @@ static func shake_x(player: Node, strength: float, time: float) -> void:
 
 
 static func spawn(parent: Node, n: Node, at: Vector2) -> Node:
+	# el grito visual va con el grito del boss (sonido; la arena evita que se repita)
+	if parent.has_method("boss_roar"):
+		parent.call("boss_roar")
 	parent.add_child(n)
 	(n as Node2D).global_position = at
 	return n

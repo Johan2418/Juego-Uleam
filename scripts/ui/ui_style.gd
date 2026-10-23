@@ -20,9 +20,9 @@ static func font() -> Font:
 
 ## Texto arcade: sombra, borde grueso oscuro y relleno con degradado simple (arriba claro).
 static func title(ci: CanvasItem, pos: Vector2, s: String, size: int, fill: Color, edge: Color = Color(0.05, 0.03, 0.1),
-		align: int = HORIZONTAL_ALIGNMENT_CENTER, width: float = -1.0, skew: float = -0.18) -> void:
+		align: int = HORIZONTAL_ALIGNMENT_CENTER, width: float = -1.0, skew: float = -0.18, base: Transform2D = Transform2D.IDENTITY) -> void:
 	var f := font()
-	var m := Transform2D(Vector2(1, 0), Vector2(skew, 1), pos)
+	var m := base * Transform2D(Vector2(1, 0), Vector2(skew, 1), pos)
 	ci.draw_set_transform_matrix(m)
 	var p := Vector2(-width * 0.5 if width > 0.0 and align == HORIZONTAL_ALIGNMENT_CENTER else 0.0, 0.0)
 	ci.draw_string_outline(f, p + Vector2(3, 4), s, align, width, size, maxi(6, size / 6), Color(0, 0, 0, 0.55))
