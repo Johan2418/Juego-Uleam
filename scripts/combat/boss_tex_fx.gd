@@ -5,6 +5,7 @@ extends RefCounted
 
 const GameFeel := preload("res://scripts/combat/game_feel.gd")
 const BossFx := preload("res://scripts/combat/boss_fx.gd")
+const CoopBoss := preload("res://scripts/combat/coop_boss.gd")
 const Spr := preload("res://scripts/combat/boss_sprites.gd")
 
 const OUT := Color(0.05, 0.05, 0.06)
@@ -63,10 +64,12 @@ class DigSite extends BossFx.Hazard:
 		t += delta
 		if not _burst and t >= delay + warn:
 			_burst = true
-			if player_ok():
+			for v in victims():
+				_victim = v
 				var d := player_feet() - global_position
 				if Vector2(d.x, d.y * 2.0).length() < RADIUS:
 					hurt(1)
+			_victim = null
 			GameFeel.dust(get_parent(), global_position, 6, Vector2.ZERO, 5.0, Vector2(30, 8))
 			var a0 := randf() * TAU
 			for i in shards:
@@ -117,7 +120,7 @@ class Shard extends BossFx.Hazard:
 		t += delta
 		global_position += vel * delta
 		rotation += delta * 9.0
-		if not _hit and player_ok() and player_body().distance_to(global_position) < 22.0:
+		if not _hit and touch_any(22.0):
 			_hit = true
 			hurt(1, false)
 			queue_free()
@@ -178,9 +181,11 @@ class Mask extends BossFx.Hazard:
 			queue_free()
 			return
 		rotation = sin(t * 8.0) * 0.4
-		if _hit_cd <= 0.0 and player_ok() and player_body().distance_to(global_position) < 32.0:
-			_hit_cd = 0.6
-			hurt(1, false)
+		for v in victims():
+			_victim = v
+			if player_body().distance_to(global_position) < 32.0 and cd_ok("brush", 0.6):
+				hurt(1, false)
+		_victim = null
 		queue_redraw()
 
 	func _draw() -> void:
@@ -243,19 +248,25 @@ class Stroke extends BossFx.Hazard:
 
 	func _process(delta: float) -> void:
 		t += delta
-		if player_ok() and t >= warn:
-			var l := _local(player_feet())
-			var inside := absf(l.y) < HALF_W and l.x > _a and l.x < _painted()
-			if not _hit and t < warn + paint_time + 0.05 and inside:
-				_hit = true
-				hurt(1)
-			var sm := float(player.get("speed_mult"))
-			if inside and t < warn + life:
-				if sm == 1.0:
-					player.set("speed_mult", SLOW)
-					_slowing = true
-			elif _slowing:
-				_release()
+		if t >= warn:
+			for v in victims():
+				_victim = v
+				var l := _local(player_feet())
+				var inside := absf(l.y) < HALF_W and l.x > _a and l.x < _painted()
+				if t < warn + paint_time + 0.05 and inside and first_hit():
+					_hit = true
+					hurt(1)
+				var sm := float(v.get("speed_mult"))
+				if inside and t < warn + life:
+					if sm == 1.0:
+						v.set("speed_mult", SLOW)
+						_slowed[v] = true
+						_slowing = true
+				elif _slowed.has(v):
+					if float(v.get("speed_mult")) == SLOW:
+						v.set("speed_mult", 1.0)
+					_slowed.erase(v)
+			_victim = null
 		if t >= warn + life:
 			modulate.a = clampf(1.0 - (t - warn - life) / 0.4, 0.0, 1.0)
 		if t >= warn + life + 0.4:
@@ -263,9 +274,13 @@ class Stroke extends BossFx.Hazard:
 			queue_free()
 		queue_redraw()
 
+	var _slowed := {}
+
 	func _release() -> void:
-		if _slowing and player_ok() and float(player.get("speed_mult")) == SLOW:
-			player.set("speed_mult", 1.0)
+		for v in _slowed.keys():
+			if is_instance_valid(v) and float(v.get("speed_mult")) == SLOW:
+				v.set("speed_mult", 1.0)
+		_slowed.clear()
 		_slowing = false
 
 	func _exit_tree() -> void:
@@ -322,12 +337,15 @@ class Seam extends BossFx.Hazard:
 	func _process(delta: float) -> void:
 		t += delta
 		var start := drop * n + 0.35
-		if t >= start and not _hit and player_ok():
-			var d := player_feet() - global_position
-			var e := Vector2(d.x, d.y * 2.0).length()
-			if absf(e - _r()) < 14.0 and not bool(player.get("rolling")):
-				_hit = true
-				hurt(2)
+		if t >= start:
+			for v in victims():
+				_victim = v
+				var d := player_feet() - global_position
+				var e := Vector2(d.x, d.y * 2.0).length()
+				if absf(e - _r()) < 14.0 and not bool(v.get("rolling")) and first_hit():
+					_hit = true
+					hurt(2)
+			_victim = null
 		if not _done and t >= start + close_time:
 			_done = true
 			_knot = true
@@ -454,6 +472,7 @@ class Mannequin extends CharacterBody2D:
 		if life <= 0.0:
 			die()
 			return
+		player = CoopBoss.nearest_to(get_tree(), global_position, player)   # multijugador: el más cercano
 		if player == null or not is_instance_valid(player):
 			return
 		var was := _moving
@@ -550,6 +569,10 @@ class PlayerStone extends Node2D:
 		t += delta
 		if t >= life:
 			GameFeel.dust(get_parent().get_parent(), global_position + Vector2(0, -20), 6, Vector2.ZERO, 4.0, Vector2(16, 20))
+			# se libera solo (con 2 jugadores el boss solo suelta a su objetivo)
+			var pl := get_parent()
+			if pl != null and "speed_mult" in pl and float(pl.get("speed_mult")) == 0.0:
+				pl.set("speed_mult", 1.0)
 			queue_free()
 		queue_redraw()
 

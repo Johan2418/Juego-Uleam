@@ -5,6 +5,7 @@ extends RefCounted
 
 const GameFeel := preload("res://scripts/combat/game_feel.gd")
 const BossFx := preload("res://scripts/combat/boss_fx.gd")
+const CoopBoss := preload("res://scripts/combat/coop_boss.gd")
 const Spr := preload("res://scripts/combat/boss_sprites.gd")
 
 const OUT := Color(0.05, 0.05, 0.06)
@@ -291,9 +292,13 @@ class CollapseStrip extends BossFx.Hazard:
 
 	func _process(delta: float) -> void:
 		t += delta
-		if not _hit and t >= warn and t < warn + 0.25 and player_ok() and _inside(player_feet()):
-			_hit = true
-			hurt(3)
+		if t >= warn and t < warn + 0.25:
+			for v in victims():
+				_victim = v
+				if _inside(player_feet()) and first_hit():
+					_hit = true
+					hurt(3)
+			_victim = null
 		if t > warn + 0.5:
 			queue_free()
 		queue_redraw()
@@ -306,7 +311,8 @@ class CollapseStrip extends BossFx.Hazard:
 		var b := dir * length
 		draw_colored_polygon(PackedVector2Array([a + n, b + n, b - n, a - n]), Color(1, 0.15, 0.1, 0.12 * blink))
 		var c := dir * length * k
-		draw_colored_polygon(PackedVector2Array([a + n, c + n, c - n, a - n]), Color(1, 0.25, 0.1, 0.25))
+		if k > 0.01:   # con largo 0 el polígono no se puede triangular
+			draw_colored_polygon(PackedVector2Array([a + n, c + n, c - n, a - n]), Color(1, 0.25, 0.1, 0.25))
 		draw_polyline(PackedVector2Array([a + n, b + n, b - n, a - n, a + n]), Color(1, 0.4, 0.25, 0.8 * blink), 2.0)
 		if t >= warn:
 			var dk := clampf((t - warn) / 0.3, 0.0, 1.0)
@@ -386,11 +392,14 @@ class Can extends BossFx.Hazard:
 	func _process(delta: float) -> void:
 		t += delta
 		global_position += vel * delta
-		if player_ok() and player_feet().distance_to(global_position) < 24.0:
-			hurt(1, false)
-			GameFeel.dust(get_parent(), global_position, 3, Vector2.ZERO, 3.0, Vector2(8, 4))
-			queue_free()
-			return
+		for v in victims():
+			_victim = v
+			if player_feet().distance_to(global_position) < 24.0:
+				hurt(1, false)
+				GameFeel.dust(get_parent(), global_position, 3, Vector2.ZERO, 3.0, Vector2(8, 4))
+				queue_free()
+				return
+		_victim = null
 		if global_position.x < x0 - 20.0 or global_position.x > x1 + 20.0:
 			queue_free()
 		queue_redraw()
@@ -425,27 +434,30 @@ class BlueLine extends BossFx.Hazard:
 
 	func _process(delta: float) -> void:
 		t += delta
-		if t >= warn and t < warn + up and player_ok():
-			var f := player_feet()
-			var r := _rect().grow(6.0)
-			if r.has_point(f):
-				if not _hit:
-					_hit = true
-					hurt(2)
-				# el muro empuja hacia el borde más cercano
-				var dl := f.x - r.position.x
-				var dr := r.end.x - f.x
-				var du := f.y - r.position.y
-				var dd := r.end.y - f.y
-				var m := minf(minf(dl, dr), minf(du, dd))
-				if m == dl:
-					player.global_position.x -= dl + 1.0
-				elif m == dr:
-					player.global_position.x += dr + 1.0
-				elif m == du:
-					player.global_position.y -= du + 1.0
-				else:
-					player.global_position.y += dd + 1.0
+		if t >= warn and t < warn + up:
+			for v in victims():
+				_victim = v
+				var f := player_feet()
+				var r := _rect().grow(6.0)
+				if r.has_point(f):
+					if first_hit():
+						_hit = true
+						hurt(2)
+					# el muro empuja hacia el borde más cercano
+					var dl := f.x - r.position.x
+					var dr := r.end.x - f.x
+					var du := f.y - r.position.y
+					var dd := r.end.y - f.y
+					var m := minf(minf(dl, dr), minf(du, dd))
+					if m == dl:
+						v.global_position.x -= dl + 1.0
+					elif m == dr:
+						v.global_position.x += dr + 1.0
+					elif m == du:
+						v.global_position.y -= du + 1.0
+					else:
+						v.global_position.y += dd + 1.0
+			_victim = null
 		if t > warn + up + 0.3:
 			queue_free()
 		queue_redraw()
@@ -592,16 +604,19 @@ class ArcSet extends BossFx.Hazard:
 		if t >= warn:
 			angle += spin * delta
 		_place()
-		if t >= warn and t < life and player_ok() and _cd <= 0.0:
-			var pb := player_body()
-			for pr in _pairs():
-				var a: Pole = pr[0]
-				var b: Pole = pr[1]
-				var ya := Vector2(0, 40)
-				if seg_dist_local(pb, a.top() + ya, b.top() + ya) < 18.0:
-					_cd = 0.7
-					hurt(1)
-					break
+		if t >= warn and t < life:
+			for v in victims():
+				_victim = v
+				var pb := player_body()
+				for pr in _pairs():
+					var a: Pole = pr[0]
+					var b: Pole = pr[1]
+					var ya := Vector2(0, 40)
+					if seg_dist_local(pb, a.top() + ya, b.top() + ya) < 18.0:
+						if cd_ok("wire", 0.7):
+							hurt(1)
+						break
+			_victim = null
 		if t > life:
 			for p in poles:
 				if is_instance_valid(p):
@@ -655,9 +670,13 @@ class Ball extends BossFx.Hazard:
 		var a := lerpf(a0, a1, e)
 		pos = center + Vector2.from_angle(a) * Vector2(radius, radius * 0.6)
 		global_position = center
-		if t >= delay and not _hit and player_ok() and player_feet().distance_to(pos) < 46.0:
-			_hit = true
-			hurt(2)
+		if t >= delay:
+			for v in victims():
+				_victim = v
+				if player_feet().distance_to(pos) < 46.0 and first_hit():
+					_hit = true
+					hurt(2)
+			_victim = null
 		if t > delay + dur + 0.25:
 			queue_free()
 		queue_redraw()
@@ -738,9 +757,11 @@ class Gear extends BossFx.Hazard:
 		if global_position.y < area.position.y + 40.0 or global_position.y > area.end.y - 10.0:
 			vel.y = -vel.y
 			global_position.y = clampf(global_position.y, area.position.y + 40.0, area.end.y - 10.0)
-		if _cd <= 0.0 and player_ok() and player_feet().distance_to(global_position) < 30.0:
-			_cd = 0.7
-			hurt(1, false)
+		for v in victims():
+			_victim = v
+			if player_feet().distance_to(global_position) < 30.0 and cd_ok("bump", 0.7):
+				hurt(1, false)
+		_victim = null
 		if t > life:
 			modulate.a = clampf(1.0 - (t - life) / 0.3, 0.0, 1.0)
 		if t > life + 0.3:
@@ -844,9 +865,12 @@ class Wave extends BossFx.Hazard:
 		t += delta
 		if t >= warn:
 			x += dir * speed * delta
-			if not _hit and player_ok() and absf(player_feet().x - x) < 28.0:
-				_hit = true
-				hurt(2)
+			for v in victims():
+				_victim = v
+				if absf(player_feet().x - x) < 28.0 and first_hit():
+					_hit = true
+					hurt(2)
+			_victim = null
 		if (dir > 0.0 and x > area.end.x + 60.0) or (dir < 0.0 and x < area.position.x - 60.0):
 			queue_free()
 		queue_redraw()
@@ -988,6 +1012,7 @@ class Drone extends CharacterBody2D:
 		_hit_t -= delta
 		_bump_cd -= delta
 		queue_redraw()
+		player = CoopBoss.nearest_to(get_tree(), global_position, player)   # multijugador: el más cercano
 		if _dead or player == null or not is_instance_valid(player):
 			return
 		if _dash > 0.0:

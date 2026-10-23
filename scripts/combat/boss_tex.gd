@@ -10,6 +10,7 @@ extends CharacterBody2D
 ## Sin class_name: cargar con preload.
 
 const GameFeel := preload("res://scripts/combat/game_feel.gd")
+const CoopBoss := preload("res://scripts/combat/coop_boss.gd")
 const Barrage := preload("res://scripts/combat/boss_barrage.gd")
 const BossFx := preload("res://scripts/combat/boss_fx.gd")
 const Fx := preload("res://scripts/combat/boss_tex_fx.gd")
@@ -409,6 +410,7 @@ func _clamp_inside() -> void:
 
 
 func _choose_attack() -> void:
+	CoopBoss.retarget(self)
 	var pick := ""
 	if unseen_t > GRAB_AFTER[phase - 1] and _player_ok():
 		pick = "grab"
@@ -452,16 +454,29 @@ func _end_attack(tok: int) -> void:
 
 # --- Utilidades -----------------------------------------------------------------
 
+## Multijugador: jugador que se está revisando en un `for v in _victims()` (el daño es para todos).
+var _victim: Node2D = null
+
+
+func _victims() -> Array:
+	return CoopBoss.targets(get_tree()) if is_inside_tree() else []
+
+
+func _who() -> Node2D:
+	return _victim if _victim != null else player
+
+
 func _player_ok() -> bool:
-	return player != null and is_instance_valid(player)
+	var w := _who()
+	return w != null and is_instance_valid(w)
 
 
 func _player_body() -> Vector2:
-	return player.global_position + Vector2(0, -32)
+	return _who().global_position + Vector2(0, -32)
 
 
 func _player_feet() -> Vector2:
-	return player.global_position + Vector2(0, 12)
+	return _who().global_position + Vector2(0, 12)
 
 
 func _dir_to_player(from: Vector2) -> Vector2:
@@ -582,7 +597,7 @@ func _interrupt() -> void:
 func hurt_player(amount: int, from: Vector2, unblockable: bool = false) -> void:
 	if not _player_ok() or state == "dead" or state == "paused":
 		return
-	player.call("take_hit", amount, from, unblockable)
+	_who().call("take_hit", amount, from, unblockable)
 
 
 # --- La Mirada ------------------------------------------------------------------
@@ -667,9 +682,12 @@ func _atk_grab(tok: int) -> void:
 	_pose(_dir_to_player(global_position) * 16.0, 0.0, 0.08)
 	if not await _hold(0.1, tok):
 		return
-	if _player_ok() and _player_feet().distance_to(global_position) < 175.0 and not bool(player.get("rolling")):
-		hurt_player(2, global_position, true)
-		_petrify_player(1.0)
+	for v in _victims():
+		_victim = v
+		if _player_feet().distance_to(global_position) < 175.0 and not bool(v.get("rolling")):
+			hurt_player(2, global_position, true)
+			_petrify_player(1.0)
+	_victim = null
 	if not await _hold(0.5, tok):
 		return
 	_end_attack(tok)
@@ -679,11 +697,12 @@ func _atk_grab(tok: int) -> void:
 func _petrify_player(time: float) -> void:
 	if not _player_ok():
 		return
-	player.set("speed_mult", 0.0)
+	var who := _who()
+	who.set("speed_mult", 0.0)
 	_pose_lock = time
 	var p := Fx.PlayerStone.new()
 	p.life = time
-	player.add_child(p)
+	who.add_child(p)
 
 
 # --- Recibir daño ----------------------------------------------------------------
@@ -1214,10 +1233,12 @@ class GlitchTile extends BossFx.Hazard:
 		var lt := t - delay
 		if lt >= warn and not _boom:
 			_boom = true
-			if player_ok():
+			for v in victims():
+				_victim = v
 				var d := player_feet() - global_position
 				if absf(d.x) < S * 0.5 and absf(d.y) < S * 0.3:
 					hurt(2, true)
+			_victim = null
 		if lt > warn + 0.35:
 			queue_free()
 		queue_redraw()

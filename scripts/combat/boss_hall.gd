@@ -92,11 +92,10 @@ func _ready() -> void:
 		var cam := pl.get_node_or_null("Camera2D") as Camera2D
 		if cam:
 			cam.zoom = Vector2.ONE
-			if players.size() == 1:
-				cam.limit_left = int(HALL.position.x)
-				cam.limit_right = int(HALL.end.x)
-				cam.limit_top = int(HALL.position.y)
-				cam.limit_bottom = int(HALL.end.y)
+			cam.limit_left = int(HALL.position.x)
+			cam.limit_right = int(HALL.end.x)
+			cam.limit_top = int(HALL.position.y)
+			cam.limit_bottom = int(HALL.end.y)
 			cam.reset_smoothing()
 	var vig := Vignette.new()
 	add_child(vig)

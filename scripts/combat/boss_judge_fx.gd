@@ -5,6 +5,7 @@ extends RefCounted
 
 const GameFeel := preload("res://scripts/combat/game_feel.gd")
 const BossFx := preload("res://scripts/combat/boss_fx.gd")
+const CoopBoss := preload("res://scripts/combat/coop_boss.gd")
 const Spr := preload("res://scripts/combat/boss_sprites.gd")
 
 const OUT := Color(0.05, 0.05, 0.06)
@@ -119,9 +120,9 @@ class Seal extends BossFx.Hazard:
 				GameFeel.parry_burst(get_parent(), global_position, 30.0)
 				queue_free()
 				return
-		elif not _done and player_ok() and player_body().distance_to(global_position) < 30.0:
+		elif not _done and touch_any(30.0):
 			_done = true
-			var cc: Variant = player.get("class_controller")
+			var cc: Variant = _who().get("class_controller")
 			var parried := false
 			if cc != null and is_instance_valid(cc) and bool(cc.get("parrying")) and bool(cc.call("parry_covers", global_position)):
 				if strict <= 0.0 or float(cc.call("parry_age")) <= strict:
@@ -140,6 +141,7 @@ class Seal extends BossFx.Hazard:
 					n.color = Color(1, 0.5, 0.3)
 					get_parent().add_child(n)
 					n.global_position = global_position + Vector2(0, -30)
+			_victim = null
 			if is_instance_valid(boss):
 				boss.call("rally_result" if rally else "seal_result", parried)
 			if not parried:
@@ -203,10 +205,12 @@ class Spotlight extends BossFx.Hazard:
 		if _strike >= 0.0:
 			_strike += delta
 			if _strike >= 0.4 and _strike - delta < 0.4:
-				if player_ok():
+				for v in victims():
+					_victim = v
 					var d2 := player_feet() - _strike_at
 					if Vector2(d2.x, d2.y * 2.0).length() < R + 6.0:
 						hurt(2)
+				_victim = null
 				GameFeel.dust(get_parent(), _strike_at, 6, Vector2.ZERO, 5.0, Vector2(30, 8))
 			if _strike > 0.7:
 				_strike = -1.0
@@ -255,12 +259,15 @@ class Borders extends BossFx.Hazard:
 
 	func _process(delta: float) -> void:
 		t += delta
-		if not _hit and t >= warn and player_ok():
+		if not _hit and t >= warn:
 			_hit = true
-			var f := player_feet()
-			for i in 4:
-				if i != safe and _quad(i).has_point(f):
-					hurt(2)
+			for v in victims():
+				_victim = v
+				var f := player_feet()
+				for i in 4:
+					if i != safe and _quad(i).has_point(f):
+						hurt(2)
+			_victim = null
 			for i in 4:
 				if i != safe:
 					GameFeel.dust(get_parent(), _quad(i).get_center(), 8, Vector2.ZERO, 6.0, Vector2(120, 30))
@@ -390,23 +397,29 @@ class TapeBox extends BossFx.Hazard:
 		_cd -= delta
 		if t >= warn and tapes.is_empty():
 			_make()
-		if player_ok() and not tapes.is_empty() and _cd <= 0.0:
-			var f := player_feet()
-			for tp in tapes:
-				if is_instance_valid(tp) and not tp.broken:
-					if f.distance_to(Geometry2D.get_closest_point_to_segment(f, tp.a, tp.b)) < 12.0:
-						_cd = 0.6
-						hurt(1)
-						# empuja hacia el centro
-						player.global_position += (global_position - f).normalized() * 18.0
-						break
+		if not tapes.is_empty():
+			for v in victims():
+				_victim = v
+				var f := player_feet()
+				for tp in tapes:
+					if is_instance_valid(tp) and not tp.broken:
+						if f.distance_to(Geometry2D.get_closest_point_to_segment(f, tp.a, tp.b)) < 12.0:
+							if cd_ok("tape", 0.6):
+								hurt(1)
+							# empuja hacia el centro
+							v.global_position += (global_position - f).normalized() * 18.0
+							break
+			_victim = null
 		# láser forense: una línea vertical que cruza la caja
-		if t >= scan_at and t < scan_at + scan_time and player_ok() and not _scan_hit:
+		if t >= scan_at and t < scan_at + scan_time:
 			var x := _scan_x()
-			var f2 := player_feet()
-			if absf(f2.x - x) < 10.0 and absf(f2.y - global_position.y) < half * 0.7 + 10.0:
-				_scan_hit = true
-				hurt(2)
+			for v in victims():
+				_victim = v
+				var f2 := player_feet()
+				if absf(f2.x - x) < 10.0 and absf(f2.y - global_position.y) < half * 0.7 + 10.0 and first_hit("scan"):
+					_scan_hit = true
+					hurt(2)
+			_victim = null
 		if t > life:
 			for tp in tapes:
 				if is_instance_valid(tp):
@@ -453,10 +466,12 @@ class Book extends BossFx.Hazard:
 		if not _landed and k >= warn:
 			_landed = true
 			GameFeel.dust(get_parent(), global_position, 5, Vector2.ZERO, 4.0, Vector2(34, 7))
-			if player_ok():
+			for v in victims():
+				_victim = v
 				var d := player_feet() - global_position
 				if Vector2(d.x, d.y * 2.0).length() < R:
 					hurt(2)
+			_victim = null
 		if k > warn + 0.6:
 			modulate.a = clampf(1.0 - (k - warn - 0.6) / 0.3, 0.0, 1.0)
 		if k > warn + 0.9:
@@ -512,22 +527,27 @@ class Market extends BossFx.Hazard:
 			ang += spin * delta
 			if player_ok():
 				global_position = global_position.move_toward(player_feet(), 55.0 * delta)
-			if t >= warn and player_ok() and _cd <= 0.0:
-				var f := player_feet()
-				for i in 2:
-					var l: Array = _line(i)
-					var la: Vector2 = l[0]
-					var lb: Vector2 = l[1]
-					if f.distance_to(Geometry2D.get_closest_point_to_segment(f, la, lb)) < 10.0:
-						_cd = 0.7
-						hurt(1)
-						break
+			if t >= warn:
+				for v in victims():
+					_victim = v
+					var f := player_feet()
+					for i in 2:
+						var l: Array = _line(i)
+						var la: Vector2 = l[0]
+						var lb: Vector2 = l[1]
+						if f.distance_to(Geometry2D.get_closest_point_to_segment(f, la, lb)) < 10.0:
+							if cd_ok("cross", 0.7):
+								hurt(1)
+							break
+				_victim = null
 		elif not _boom:
 			_boom = true
-			if player_ok():
+			for v in victims():
+				_victim = v
 				var d := player_feet() - global_position
 				if Vector2(d.x, d.y * 2.0).length() < BOOM_R:
 					hurt(2)
+			_victim = null
 			GameFeel.dust(get_parent(), global_position, 10, Vector2.ZERO, 6.0, Vector2(BOOM_R, 20))
 		if t > life + 0.4:
 			queue_free()
@@ -626,6 +646,7 @@ class Folder extends CharacterBody2D:
 		_hit_t -= delta
 		_grab_cd -= delta
 		queue_redraw()
+		player = CoopBoss.nearest_to(get_tree(), global_position, player)   # multijugador: el más cercano
 		if _dead or player == null or not is_instance_valid(player):
 			return
 		if _slow_t > 0.0:

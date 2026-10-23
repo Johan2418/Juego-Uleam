@@ -141,8 +141,11 @@ class Bolt extends SHazard:
 		if t >= warn and not _hit:
 			_hit = true
 			z_index = 4
-			if not harmless and feet_in(global_position, r):
-				hurt(damage, true)
+			for v in victims():
+				_victim = v
+				if not harmless and feet_in(global_position, r):
+					hurt(damage, true)
+			_victim = null
 			if is_inside_tree():
 				GameFeel.dust(get_parent(), global_position, 6, Vector2.ZERO, 5.0, Vector2(r * 0.7, 6))
 				if Anim.ok("fxbolt"):
@@ -249,16 +252,19 @@ class Realtime extends SHazard:
 	func _process(delta: float) -> void:
 		t += delta
 		_cd = maxf(0.0, _cd - delta)
-		if t > warm and t < life and _cd <= 0.0 and player_ok():
-			var p := player_body() - global_position
+		if t > warm and t < life:
 			var pts := _pts()
-			for i in pts.size():
-				var a: Vector2 = pts[i]
-				var b: Vector2 = pts[(i + 1) % pts.size()]
-				if U.dist_to_seg(p, a, b) < 14.0:
-					hurt(1, true)
-					_cd = 0.7
-					break
+			for v in victims():
+				_victim = v
+				var p := player_body() - global_position
+				for i in pts.size():
+					var a: Vector2 = pts[i]
+					var b: Vector2 = pts[(i + 1) % pts.size()]
+					if U.dist_to_seg(p, a, b) < 14.0:
+						if cd_ok("arc", 0.7):
+							hurt(1, true)
+						break
+			_victim = null
 		if t > life + 0.3:
 			queue_free()
 		queue_redraw()
@@ -322,10 +328,12 @@ class Rows extends SHazard:
 		var local := t - w * _wave_t()
 		if w < waves and local >= warn and _hit_wave != w:
 			_hit_wave = w
-			if player_ok():
+			for v in victims():
+				_victim = v
 				var row := _row_of(player_feet().y)
 				if row >= 0 and (row + start + w) % 2 == 0:
 					hurt(2, true)
+			_victim = null
 		if t > waves * _wave_t():
 			queue_free()
 		queue_redraw()
@@ -396,18 +404,19 @@ class EdgeBall extends SHazard:
 				if global_position.y < area.position.y + 10 or global_position.y > area.end.y - 10:
 					vel.y = -vel.y
 					bounces -= 1
-			if not _done and player_ok() and player_body().distance_to(global_position) < 22.0:
-				if bool(player.get("rolling")):
-					pass
+			if not _done and touch_any(22.0):
+				if bool(_who().get("rolling")):
+					_victim = null
 				elif fake:
 					_done = true
 					queue_free()
 					return
 				else:
 					_done = true
-					var r := Final.parry_ok(player, global_position)
+					var r := Final.parry_ok(_who(), global_position)
 					if r == 1:
 						back = true
+						_victim = null
 						GameFeel.parry_burst(get_parent(), global_position, 22.0)
 						if is_instance_valid(boss):
 							boss.call("inject_context", "parry")
@@ -491,10 +500,12 @@ class Selection extends SHazard:
 		if t >= follow + lock and not _hit:
 			_hit = true
 			z_index = 4
-			if player_ok():
+			for v in victims():
+				_victim = v
 				var r := Rect2(global_position - size * 0.5, size)
 				if r.has_point(player_feet()):
 					hurt(2, true)
+			_victim = null
 			for i in 34:
 				_chars.append([Vector2(randf_range(-size.x, size.x) * 0.45, randf_range(-size.y, size.y) * 0.45), Vector2(randf_range(-220, 220), randf_range(-280, -40)), "01{};=<>/"[randi() % 9], randf_range(-6.0, 6.0)])
 			if is_inside_tree():
@@ -676,23 +687,25 @@ class PShot extends SHazard:
 				queue_free()
 				return
 		global_position += vel * delta
-		if not _done and player_ok() and player_body().distance_to(global_position) < 20.0:
-			if bool(player.get("rolling")):
-				pass
+		if not _done and touch_any(20.0):
+			if bool(_who().get("rolling")):
+				_victim = null
 			else:
 				_done = true
 				if fake:
 					queue_free()
 					return
-				var r := Final.parry_ok(player, global_position)
+				var who := _who()
+				var r := Final.parry_ok(who, global_position)
 				if r == 1:
 					GameFeel.parry_burst(get_parent(), global_position, 18.0)
 					if is_instance_valid(boss):
 						boss.call("inject_context", "parry")
 				else:
-					var before := int(player.get("hp"))
+					var before := int(who.get("hp"))
 					hurt(damage, false)
-					if kind == "lock" and int(player.get("hp")) < before and is_instance_valid(boss):
+					if kind == "lock" and int(who.get("hp")) < before and is_instance_valid(boss):
+						boss.set("player", who)   # le quita la técnica al que golpeó
 						boss.call("revoke_player")
 				queue_free()
 				return
@@ -873,8 +886,11 @@ class Silhouette extends SHazard:
 		if t >= delay and not _hit:
 			_hit = true
 			z_index = 4
-			if feet_in(global_position, r):
-				hurt(2, true)
+			for v in victims():
+				_victim = v
+				if feet_in(global_position, r):
+					hurt(2, true)
+			_victim = null
 		if t > delay + 0.45:
 			queue_free()
 		queue_redraw()
@@ -959,13 +975,15 @@ class LoginWall extends SHazard:
 		if pos > end + thick:
 			queue_free()
 			return
-		if t > warn and _cd <= 0.0 and player_ok():
-			var f := player_feet()
-			var along := f.y if vertical else f.x
-			var across := f.x if vertical else f.y
-			if across > pos - 6.0 and across < pos + thick + 6.0 and absf(along - gap) > gap_w * 0.5 - 6.0:
-				hurt(2, true)
-				_cd = 0.8
+		if t > warn:
+			for v in victims():
+				_victim = v
+				var f := player_feet()
+				var along := f.y if vertical else f.x
+				var across := f.x if vertical else f.y
+				if across > pos - 6.0 and across < pos + thick + 6.0 and absf(along - gap) > gap_w * 0.5 - 6.0 and cd_ok("wall", 0.8):
+					hurt(2, true)
+			_victim = null
 		queue_redraw()
 
 	func _draw() -> void:
@@ -1020,13 +1038,16 @@ class SessionRing extends SHazard:
 		if t >= count and not _hit:
 			_hit = true
 			z_index = 4
-			if feet_in(global_position, r):
-				hurt(2, true)
-				var n := BossFx.DmgNumber.new()
-				n.text = "SESIÓN EXPIRADA"
-				n.color = CLERK.lightened(0.4)
-				get_parent().add_child(n)
-				n.global_position = player_body() + Vector2(0, -40)
+			for v in victims():
+				_victim = v
+				if feet_in(global_position, r):
+					hurt(2, true)
+					var n := BossFx.DmgNumber.new()
+					n.text = "SESIÓN EXPIRADA"
+					n.color = CLERK.lightened(0.4)
+					get_parent().add_child(n)
+					n.global_position = player_body() + Vector2(0, -40)
+			_victim = null
 		if t > count + 0.5:
 			queue_free()
 		queue_redraw()
@@ -1124,8 +1145,11 @@ class Boom extends SHazard:
 		t += delta
 		if t >= warn and not _hit:
 			_hit = true
-			if feet_in(global_position, r):
-				hurt(2, true)
+			for v in victims():
+				_victim = v
+				if feet_in(global_position, r):
+					hurt(2, true)
+			_victim = null
 		if t > warn + 0.4:
 			queue_free()
 		queue_redraw()
@@ -1313,8 +1337,11 @@ class Crack extends SHazard:
 		if t >= warn and not _hit:
 			_hit = true
 			z_index = 2
-			if player_ok() and U.dist_to_seg(player_feet() - global_position, Vector2.ZERO, to) < 26.0:
-				hurt(2, true)
+			for v in victims():
+				_victim = v
+				if U.dist_to_seg(player_feet() - global_position, Vector2.ZERO, to) < 26.0:
+					hurt(2, true)
+			_victim = null
 			var n := int(to.length() / 90.0) + 1
 			for i in n:
 				var at := global_position + to * (float(i) + 0.5) / n
@@ -1422,16 +1449,26 @@ class OrbitRock extends SHazard:
 		var k := clampf(t / dur, 0.0, 1.0)
 		var a := a0 + TAU * k
 		global_position = center + Vector2(cos(a) * radius, sin(a) * radius * 0.6)
-		if not _done and player_ok() and player_body().distance_to(global_position + Vector2(0, 10)) < 32.0 and not bool(player.get("rolling")):
+		var hit_who: Node2D = null
+		if not _done:
+			for v in victims():
+				_victim = v
+				if player_body().distance_to(global_position + Vector2(0, 10)) < 32.0 and not bool(v.get("rolling")):
+					hit_who = v
+					break
+			_victim = null
+		if hit_who != null:
 			_done = true
-			var r := Final.parry_ok(player, global_position)
+			_victim = hit_who
+			var r := Final.parry_ok(hit_who, global_position)
 			if r == 1:
 				GameFeel.parry_burst(get_parent(), global_position, 26.0)
-				_bounce = (global_position - player.global_position).normalized() * 420.0
+				_bounce = (global_position - hit_who.global_position).normalized() * 420.0
 				if is_instance_valid(boss):
 					boss.call("inject_context", "parry")
 			else:
 				hurt(2, false)
+			_victim = null
 		if t > dur:
 			queue_free()
 		queue_redraw()
@@ -1490,13 +1527,15 @@ class Flare extends SHazard:
 				em.rate = 50.0
 				get_parent().add_child(em)
 				em.global_position = at
-		if t > charge and t < charge + sweep and _cd <= 0.0 and player_ok():
+		if t > charge and t < charge + sweep:
 			var dir := Vector2.from_angle(_angle())
-			var p := player_body() - _origin
-			var along := p.dot(dir)
-			if along > 0.0 and absf(p.dot(dir.orthogonal())) < width * 0.5 + 8.0 and not _shadowed():
-				hurt(2, true)
-				_cd = 0.6
+			for v in victims():
+				_victim = v
+				var p := player_body() - _origin
+				var along := p.dot(dir)
+				if along > 0.0 and absf(p.dot(dir.orthogonal())) < width * 0.5 + 8.0 and not _shadowed() and cd_ok("flare", 0.6):
+					hurt(2, true)
+			_victim = null
 		if t > charge + sweep + 0.3:
 			queue_free()
 		queue_redraw()
@@ -1626,11 +1665,13 @@ class LaneDash extends SHazard:
 		t += delta
 		if t > warn:
 			x += speed * dir * delta
-			if not _hit and player_ok():
+			for v in victims():
+				_victim = v
 				var f := player_feet()
-				if absf(f.y - y) < 26.0 and absf(f.x - x) < 40.0:
+				if absf(f.y - y) < 26.0 and absf(f.x - x) < 40.0 and first_hit():
 					_hit = true
 					hurt(2, true)
+			_victim = null
 		if t > warn + area.size.x / speed + 0.3:
 			queue_free()
 		queue_redraw()

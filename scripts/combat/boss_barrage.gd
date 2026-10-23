@@ -256,14 +256,17 @@ class Shot extends BossFx.Hazard:
 		if t > delay + life:
 			queue_free()
 			return
-		if t > delay and player_ok() and player_body().distance_to(global_position) < 20.0:
-			if bool(player.get("rolling")):
-				pass   # rodando lo atraviesa
-			else:
-				hurt(1, false)   # el jugador decide: parry de frente lo bloquea
-				GameFeel.parry_burst(get_parent(), global_position, 14.0)
-				queue_free()
-				return
+		if t > delay:
+			for v in victims():
+				_victim = v
+				if player_body().distance_to(global_position) < 20.0 and not bool(v.get("rolling")):
+					# (rodando lo atraviesa) el jugador decide: parry de frente lo bloquea
+					hurt(1, false)
+					_victim = null
+					GameFeel.parry_burst(get_parent(), global_position, 14.0)
+					queue_free()
+					return
+			_victim = null
 		queue_redraw()
 
 	func _draw() -> void:
@@ -304,10 +307,12 @@ class Strike extends BossFx.Hazard:
 		t += delta
 		if not _boom and t >= warn:
 			_boom = true
-			if player_ok():
+			for v in victims():
+				_victim = v
 				var d := player_feet() - global_position
 				if Vector2(d.x, d.y * 2.0).length() < r:
 					hurt(2, true)
+			_victim = null
 			GameFeel.dust(get_parent(), global_position, 6, Vector2.ZERO, 3.0)
 		if t >= warn + 0.3:
 			queue_free()

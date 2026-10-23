@@ -80,11 +80,10 @@ func _ready() -> void:
 		var cam := p.get_node_or_null("Camera2D") as Camera2D
 		if cam:
 			cam.zoom = Vector2(1.1, 1.1)
-			if players.size() == 1:
-				cam.limit_left = int(ROOM.position.x - 40)
-				cam.limit_right = int(ROOM.end.x + 40)
-				cam.limit_top = int(ROOM.position.y - 140)
-				cam.limit_bottom = int(ROOM.end.y + 40)
+			cam.limit_left = int(ROOM.position.x - 40)
+			cam.limit_right = int(ROOM.end.x + 40)
+			cam.limit_top = int(ROOM.position.y - 140)
+			cam.limit_bottom = int(ROOM.end.y + 40)
 			cam.reset_smoothing()
 		var cc: Node = p.get("class_controller")
 		cc.connect("attack_started", _on_attack.bind(p))

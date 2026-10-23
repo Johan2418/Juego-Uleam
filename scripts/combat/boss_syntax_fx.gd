@@ -5,6 +5,7 @@ extends RefCounted
 
 const GameFeel := preload("res://scripts/combat/game_feel.gd")
 const BossFx := preload("res://scripts/combat/boss_fx.gd")
+const CoopBoss := preload("res://scripts/combat/coop_boss.gd")
 const Spr := preload("res://scripts/combat/boss_sprites.gd")
 
 const OUT := Color(0.05, 0.05, 0.06)
@@ -154,11 +155,14 @@ class Chalk extends BossFx.Hazard:
 	func _process(delta: float) -> void:
 		t += delta
 		global_position += vel * delta
-		if player_ok() and player_body().distance_to(global_position) < 20.0:
-			hurt(1, false)
-			GameFeel.dust(get_parent(), global_position, 3, Vector2.ZERO, 3.0, Vector2(8, 4))
-			queue_free()
-			return
+		for v in victims():
+			_victim = v
+			if player_body().distance_to(global_position) < 20.0:
+				hurt(1, false)
+				GameFeel.dust(get_parent(), global_position, 3, Vector2.ZERO, 3.0, Vector2(8, 4))
+				queue_free()
+				return
+		_victim = null
 		if t > life:
 			queue_free()
 		queue_redraw()
@@ -192,10 +196,12 @@ class BlockDrop extends BossFx.Hazard:
 		if not _landed and k >= warn:
 			_landed = true
 			GameFeel.dust(get_parent(), global_position, 5, Vector2.ZERO, 4.0, Vector2(30, 6))
-			if player_ok():
+			for v in victims():
+				_victim = v
 				var d := player_feet() - global_position
 				if Vector2(d.x, d.y * 2.0).length() < R:
 					hurt(2)
+			_victim = null
 		if k > warn + 0.7:
 			modulate.a = clampf(1.0 - (k - warn - 0.7) / 0.3, 0.0, 1.0)
 		if k > warn + 1.0:
@@ -247,11 +253,14 @@ class BrailleRow extends BossFx.Hazard:
 
 	func _process(delta: float) -> void:
 		t += delta
-		if t >= warn and t < warn + active and not _hit and player_ok():
-			var f := player_feet()
-			if absf(f.y - global_position.y) < 18.0 and f.x > x0 and f.x < x1 and not _safe(f.x):
-				_hit = true
-				hurt(2)
+		if t >= warn and t < warn + active:
+			for v in victims():
+				_victim = v
+				var f := player_feet()
+				if absf(f.y - global_position.y) < 18.0 and f.x > x0 and f.x < x1 and not _safe(f.x) and first_hit():
+					_hit = true
+					hurt(2)
+			_victim = null
 		if t > warn + active + 0.2:
 			queue_free()
 		queue_redraw()
@@ -299,13 +308,16 @@ class RedLight extends BossFx.Hazard:
 		t += delta
 		var per := green + red
 		var idx := int(t / per)
-		if is_red() and fmod(t, per) > green + 0.25 and _hit_this != idx and player_ok():
-			var v: Vector2 = player.get("velocity")
-			if v.length() > 30.0:
-				_hit_this = idx
-				hurt(1)
-				if is_instance_valid(boss):
-					boss.call("_say", "¡TE MOVISTE!", Color(1, 0.3, 0.25))
+		if is_red() and fmod(t, per) > green + 0.25:
+			for who in victims():
+				_victim = who
+				var v: Vector2 = who.get("velocity")
+				if v.length() > 30.0 and first_hit("red%d" % idx):
+					_hit_this = idx
+					hurt(1)
+					if is_instance_valid(boss):
+						boss.call("_say", "¡TE MOVISTE!", Color(1, 0.3, 0.25))
+			_victim = null
 		if t > per * cycles:
 			queue_free()
 		queue_redraw()
@@ -417,6 +429,7 @@ class Bellhop extends CharacterBody2D:
 		_hit_t -= delta
 		_bump_cd -= delta
 		queue_redraw()
+		player = CoopBoss.nearest_to(get_tree(), global_position, player)   # multijugador: el más cercano
 		if _dead or player == null or not is_instance_valid(player):
 			return
 		if _dash > 0.0:
@@ -481,10 +494,13 @@ class Page extends BossFx.Hazard:
 	func _process(delta: float) -> void:
 		t += delta
 		global_position += vel * delta + _side * cos(t * 7.0) * 90.0 * delta
-		if player_ok() and player_body().distance_to(global_position) < 22.0:
-			hurt(1, false)
-			queue_free()
-			return
+		for v in victims():
+			_victim = v
+			if player_body().distance_to(global_position) < 22.0:
+				hurt(1, false)
+				queue_free()
+				return
+		_victim = null
 		if t > life:
 			queue_free()
 		queue_redraw()
@@ -520,10 +536,12 @@ class Period extends BossFx.Hazard:
 			GameFeel.dust(get_parent(), global_position, 12, Vector2.ZERO, 7.0, Vector2(70, 10))
 			if is_instance_valid(boss):
 				boss.call("_impact", global_position, 7.0)
-			if player_ok():
+			for v in victims():
+				_victim = v
 				var d := player_feet() - global_position
 				if Vector2(d.x, d.y * 2.0).length() < R:
 					hurt(3)
+			_victim = null
 		if t > warn + 1.2:
 			queue_free()
 		queue_redraw()
@@ -584,9 +602,11 @@ class Bubble extends BossFx.Hazard:
 		if p.y < arena.position.y + R + 20.0 or p.y > arena.end.y - R:
 			vel.y = -vel.y
 		global_position = Vector2(clampf(p.x, arena.position.x + R, arena.end.x - R), clampf(p.y, arena.position.y + R + 20.0, arena.end.y - R))
-		if _hit_cd <= 0.0 and player_ok() and player_body().distance_to(global_position) < R + 8.0:
-			_hit_cd = 0.9
-			hurt(1, false)
+		for v in victims():
+			_victim = v
+			if player_body().distance_to(global_position) < R + 8.0 and cd_ok("ball", 0.9):
+				hurt(1, false)
+		_victim = null
 		if t > life:
 			modulate.a = clampf(1.0 - (t - life) / 0.3, 0.0, 1.0)
 			if t > life + 0.3:
@@ -641,10 +661,13 @@ class PaperPlane extends BossFx.Hazard:
 			vel = Vector2.from_angle(a) * vel.length()
 		global_position += vel * delta
 		rotation = vel.angle()
-		if player_ok() and player_body().distance_to(global_position) < 18.0:
-			hurt(1, false)
-			queue_free()
-			return
+		for v in victims():
+			_victim = v
+			if player_body().distance_to(global_position) < 18.0:
+				hurt(1, false)
+				queue_free()
+				return
+		_victim = null
 		if t > life:
 			queue_free()
 		queue_redraw()

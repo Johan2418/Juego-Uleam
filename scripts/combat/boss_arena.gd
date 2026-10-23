@@ -6,6 +6,12 @@ extends Node2D
 const PlayerScene := preload("res://scenes/combat/player.tscn")
 const BossHud := preload("res://scripts/combat/boss_hud.gd")
 const ArenaFx := preload("res://scripts/combat/boss_arena_fx.gd")
+const Coop := preload("res://scripts/coop.gd")
+const CoopBoss := preload("res://scripts/combat/coop_boss.gd")
+## Multijugador: segundos que el compañero tiene que quedarse al lado para levantar a un caído.
+const REVIVE_TIME := 2.0
+const REVIVE_RANGE := 80.0
+const REVIVE_HP := 5
 ## Datos de cada boss: script, nombre, presentación, texto de victoria y piso.
 const BOSSES := {
 	"deadbeef": {
@@ -90,6 +96,10 @@ const WALL := 40.0
 static var retry: bool = false
 
 var player: CharacterBody2D
+## 1 o 2 jugadores (player = el primero).
+var players: Array = []
+var _revive := {}
+var _revive_fx: Node2D
 var boss: CharacterBody2D
 var _dim: CanvasModulate
 var _bar_box: VBoxContainer
@@ -140,27 +150,26 @@ func _ready() -> void:
 	_vignette.kind = boss_kind
 	add_child(_vignette)
 	_build_walls()
-	player = PlayerScene.instantiate()
-	player.position = Vector2(0, 230)
-	# multijugador: los bosses todavía son de 1 jugador; el jugador 1 pelea con sus controles
-	if GameState.coop:
-		player.set("slot", 1)
-	add_child(player)
-	player.set("exit_scene", CAMPUS_SCENE)
-	var cam := player.get_node_or_null("Camera2D") as Camera2D
-	if cam:
-		# boss grande: la cámara se aleja un poco para que entre entero
-		cam.zoom = Vector2.ONE
-		cam.limit_left = int(ARENA.position.x - WALL)
-		cam.limit_top = int(ARENA.position.y - 110)
-		cam.limit_right = int(ARENA.end.x + WALL)
-		cam.limit_bottom = int(ARENA.end.y + WALL)
+	players = Coop.spawn(self, Vector2(0, 230), CAMPUS_SCENE)
+	player = players[0]
+	for pl in players:
+		pl.set("ko_mode", players.size() > 1)
+		var cam := pl.get_node_or_null("Camera2D") as Camera2D
+		if cam:
+			# boss grande: la cámara se aleja un poco para que entre entero
+			cam.zoom = Vector2.ONE
+			cam.limit_left = int(ARENA.position.x - WALL)
+			cam.limit_top = int(ARENA.position.y - 110)
+			cam.limit_right = int(ARENA.end.x + WALL)
+			cam.limit_bottom = int(ARENA.end.y + WALL)
 	boss = load(cfg["script"]).new()
 	boss.name = "Boss"
 	boss.position = Vector2(0, -40)
 	boss.set("arena_rect", ARENA)
 	add_child(boss)
-	boss.call("set_player", player)
+	# con 2 jugadores se conectan los dos (parry, etc.); el objetivo inicial es el jugador 1
+	for i in range(players.size() - 1, -1, -1):
+		boss.call("set_player", players[i])
 	_dim = CanvasModulate.new()
 	add_child(_dim)
 	_build_hud()
@@ -176,7 +185,12 @@ func _ready() -> void:
 		boss.connect("arm_broken", _on_arm_broken)
 	boss.connect("intro_finished", _on_intro_done)
 	boss.connect("defeated", _on_victory)
-	player.connect("hp_changed", _on_player_hp)
+	for pl in players:
+		pl.connect("hp_changed", _on_player_hp)
+	if players.size() > 1:
+		_revive_fx = ReviveFx.new()
+		_revive_fx.arena = self
+		add_child(_revive_fx)
 	_lock_player(true)
 	if not retry:
 		_dim.color = Color(0.5, 0.5, 0.6)
@@ -207,12 +221,34 @@ func _build_walls() -> void:
 
 
 func _lock_player(on: bool) -> void:
-	if not is_instance_valid(player):
+	for pl in players:
+		if not is_instance_valid(pl):
+			continue
+		pl.set_physics_process(not on)
+		pl.set_process_unhandled_input(not on)
+		if on:
+			pl.velocity = Vector2.ZERO
+
+
+## Multijugador: el compañero se queda al lado del caído para levantarlo.
+func _process(delta: float) -> void:
+	if players.size() < 2 or _over:
 		return
-	player.set_physics_process(not on)
-	player.set_process_unhandled_input(not on)
-	if on:
-		player.velocity = Vector2.ZERO
+	for pl in players:
+		if not is_instance_valid(pl) or not bool(pl.get("coop_ko")):
+			_revive.erase(pl)
+			continue
+		var helper := false
+		for other in players:
+			if other != pl and is_instance_valid(other) and not bool(other.get("coop_ko")) \
+					and (other as Node2D).global_position.distance_to((pl as Node2D).global_position) < REVIVE_RANGE:
+				helper = true
+		var k: float = _revive.get(pl, 0.0)
+		k = k + delta if helper else maxf(0.0, k - delta * 0.5)
+		_revive[pl] = k
+		if k >= REVIVE_TIME:
+			_revive.erase(pl)
+			pl.call("revive", REVIVE_HP)
 
 
 # --- HUD --------------------------------------------------------------------------
@@ -502,6 +538,23 @@ func _on_player_hp(hp: int, _max_hp: int) -> void:
 	_last_player_hp = hp
 	if hp > 0 or _over:
 		return
+	if players.size() > 1:
+		_check_team_down.call_deferred()
+		return
+	_lose()
+
+
+## Multijugador: se pierde solo si los dos están caídos a la vez.
+func _check_team_down() -> void:
+	if _over:
+		return
+	for pl in players:
+		if is_instance_valid(pl) and not bool(pl.get("coop_ko")):
+			return
+	_lose()
+
+
+func _lose() -> void:
 	_over = true
 	boss.call("pause_ai")
 	_music_end("lose")
@@ -984,3 +1037,28 @@ class Floor extends Node2D:
 			var fx := arena.position.x + 200 + i * (arena.size.x - 400) / 3.0
 			draw_colored_polygon(PackedVector2Array([Vector2(fx - 8, arena.position.y - 10), Vector2(fx + 8, arena.position.y - 10), Vector2(fx + 90, arena.position.y + 220), Vector2(fx - 90, arena.position.y + 220)]), Color(1, 1, 0.9, 0.035))
 		draw_rect(arena, Color(0.05, 0.05, 0.07), false, 4.0)
+
+
+## Anillo de "levantando" sobre el jugador caído (multijugador).
+class ReviveFx extends Node2D:
+	var arena: Node
+
+	func _ready() -> void:
+		z_index = 50
+
+	func _process(_d: float) -> void:
+		queue_redraw()
+
+	func _draw() -> void:
+		var t := Time.get_ticks_msec() / 1000.0
+		for pl in arena.get("players"):
+			if not is_instance_valid(pl) or not bool(pl.get("coop_ko")):
+				continue
+			var c: Vector2 = (pl as Node2D).global_position + Vector2(0, -70)
+			var k: float = float(arena.get("_revive").get(pl, 0.0)) / REVIVE_TIME
+			draw_arc(c, 22, 0, TAU, 32, Color(0, 0, 0, 0.6), 7)
+			draw_arc(c, 22, -PI * 0.5, -PI * 0.5 + TAU * k, 32, Color(0.4, 1.0, 0.5), 5)
+			var f := ThemeDB.fallback_font
+			var msg := "¡LEVÁNTALO!" if k <= 0.0 else "%d%%" % int(k * 100)
+			draw_string_outline(f, c + Vector2(-60, -32 + sin(t * 6.0) * 2.0), msg, HORIZONTAL_ALIGNMENT_CENTER, 120, 15, 4, Color.BLACK)
+			draw_string(f, c + Vector2(-60, -32 + sin(t * 6.0) * 2.0), msg, HORIZONTAL_ALIGNMENT_CENTER, 120, 15, Color(1.0, 0.9, 0.4))

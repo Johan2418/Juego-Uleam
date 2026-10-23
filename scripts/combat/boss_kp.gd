@@ -9,6 +9,7 @@ extends CharacterBody2D
 ## Sin class_name: cargar con preload.
 
 const GameFeel := preload("res://scripts/combat/game_feel.gd")
+const CoopBoss := preload("res://scripts/combat/coop_boss.gd")
 const BossFx := preload("res://scripts/combat/boss_fx.gd")
 const Fx := preload("res://scripts/combat/boss_kp_fx.gd")
 const Spr := preload("res://scripts/combat/boss_sprites.gd")
@@ -489,6 +490,7 @@ func _clamp_inside() -> void:
 
 
 func _choose_attack() -> void:
+	CoopBoss.retarget(self)
 	var pick := ""
 	var lc := live_cam()
 	if lc and not bool(lc.get("handheld")) and _player_ok() and _player_feet().distance_to(lc.global_position) < DEFEND_DIST:
@@ -530,16 +532,29 @@ func _end_attack(tok: int) -> void:
 
 # --- Utilidades -----------------------------------------------------------------
 
+## Multijugador: jugador que se está revisando en un `for v in _victims()` (el daño es para todos).
+var _victim: Node2D = null
+
+
+func _victims() -> Array:
+	return CoopBoss.targets(get_tree()) if is_inside_tree() else []
+
+
+func _who() -> Node2D:
+	return _victim if _victim != null else player
+
+
 func _player_ok() -> bool:
-	return player != null and is_instance_valid(player)
+	var w := _who()
+	return w != null and is_instance_valid(w)
 
 
 func _player_body() -> Vector2:
-	return player.global_position + Vector2(0, -32)
+	return _who().global_position + Vector2(0, -32)
 
 
 func _player_feet() -> Vector2:
-	return player.global_position + Vector2(0, 12)
+	return _who().global_position + Vector2(0, 12)
 
 
 func _dir_to_player(from: Vector2) -> Vector2:
@@ -643,7 +658,7 @@ func _interrupt() -> void:
 func hurt_player(amount: int, from: Vector2, unblockable: bool = false) -> void:
 	if not _player_ok() or state == "dead" or state == "paused":
 		return
-	player.call("take_hit", amount, from, unblockable)
+	_who().call("take_hit", amount, from, unblockable)
 
 
 # --- Recibir daño ----------------------------------------------------------------
@@ -1155,9 +1170,12 @@ func _atk_charge(tok: int) -> void:
 		_clamp_inside()
 		if int(t * 30.0) % 3 == 0:
 			GameFeel.dust(get_parent(), global_position, 1, -dir * 40.0, 3.0, Vector2(30, 6))
-		if not hit and _player_ok() and _player_feet().distance_to(global_position) < 80.0:
-			hit = true
-			hurt_player(2, global_position, false)
+		for v in _victims():
+			_victim = v
+			if _player_feet().distance_to(global_position) < 80.0 and CoopBoss.once(self, "dash%d" % tok, v):
+				hit = true
+				hurt_player(2, global_position, false)
+		_victim = null
 	_impact(global_position, 5.0)
 	if not await _wait(0.6, tok):
 		return

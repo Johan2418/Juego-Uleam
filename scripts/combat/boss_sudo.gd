@@ -16,6 +16,7 @@ extends CharacterBody2D
 ## Sin class_name: cargar con preload.
 
 const GameFeel := preload("res://scripts/combat/game_feel.gd")
+const CoopBoss := preload("res://scripts/combat/coop_boss.gd")
 const Barrage := preload("res://scripts/combat/boss_barrage.gd")
 const BossFx := preload("res://scripts/combat/boss_fx.gd")
 const Fx := preload("res://scripts/combat/boss_sudo_fx.gd")
@@ -358,9 +359,13 @@ func _physics_process(delta: float) -> void:
 		_update_planets(delta)
 	if _player_ok():
 		z_index = 3 if _player_feet().y < global_position.y else 1
-	if _dashing and not _dash_hit and _player_ok() and _player_body().distance_to(global_position + Vector2(0, -60)) < 52.0:
-		_dash_hit = true
-		hurt_player(2, global_position + Vector2(0, -60), false)
+	if _dashing:
+		for v in _victims():
+			_victim = v
+			if _player_body().distance_to(global_position + Vector2(0, -60)) < 52.0 and CoopBoss.once(self, "dash%d" % _tok, v):
+				_dash_hit = true
+				hurt_player(2, global_position + Vector2(0, -60), false)
+		_victim = null
 	match state:
 		"idle":
 			_ai_move(delta)
@@ -400,6 +405,7 @@ func _clamp_inside() -> void:
 
 
 func _choose_attack() -> void:
+	CoopBoss.retarget(self)
 	var pick := ""
 	if not _queue.is_empty():
 		pick = _queue.pop_front()
@@ -461,16 +467,29 @@ func _end_attack(tok: int, ctx: float = CTX_ATTACK) -> void:
 
 # --- Utilidades -----------------------------------------------------------------
 
+## Multijugador: jugador que se está revisando en un `for v in _victims()` (el daño es para todos).
+var _victim: Node2D = null
+
+
+func _victims() -> Array:
+	return CoopBoss.targets(get_tree()) if is_inside_tree() else []
+
+
+func _who() -> Node2D:
+	return _victim if _victim != null else player
+
+
 func _player_ok() -> bool:
-	return player != null and is_instance_valid(player)
+	var w := _who()
+	return w != null and is_instance_valid(w)
 
 
 func _player_body() -> Vector2:
-	return player.global_position + Vector2(0, -32)
+	return _who().global_position + Vector2(0, -32)
 
 
 func _player_feet() -> Vector2:
-	return player.global_position + Vector2(0, 12)
+	return _who().global_position + Vector2(0, 12)
 
 
 func _dir_to_player(from: Vector2) -> Vector2:
@@ -667,7 +686,7 @@ func _interrupt() -> void:
 func hurt_player(amount: int, from: Vector2, unblockable: bool = false) -> void:
 	if not _player_ok() or state in ["dead", "paused"]:
 		return
-	player.call("take_hit", amount, from, unblockable)
+	_who().call("take_hit", amount, from, unblockable)
 
 
 func _random_floor(min_from_player: float = 0.0) -> Vector2:
@@ -2051,16 +2070,20 @@ func _astra_fail(tok: int, ball: Node2D) -> void:
 	get_parent().add_child(w)
 	_clear_cinema()
 	_shake(12.0, 0.6)
-	if _player_ok():
-		player.set("invulnerable", false)
-		player.set("_iframes_left", 0.0)
-		player.set("_shield_left", 0.0)
-		player.set("_ult_active", false)
-		player.set("rolling", false)
-		var pcc: Node = player.get("class_controller")
+	# multijugador: el ASTRA arrasa con todo el equipo
+	for pv in get_tree().get_nodes_in_group("player"):
+		var pl: Node2D = pv
+		if not is_instance_valid(pl):
+			continue
+		pl.set("invulnerable", false)
+		pl.set("_iframes_left", 0.0)
+		pl.set("_shield_left", 0.0)
+		pl.set("_ult_active", false)
+		pl.set("rolling", false)
+		var pcc: Node = pl.get("class_controller")
 		if pcc != null and pcc.has_method("cancel_action"):
 			pcc.call("cancel_action")
-		player.call("take_hit", 999, global_position + CENTER, true)
+		pl.call("take_hit", 999, global_position + CENTER, true)
 	# si por algo el jugador sigue vivo, vuelve la fase 3 con él a 1 PV
 	await get_tree().create_timer(0.6).timeout
 	if tok == _tok and state == "final":

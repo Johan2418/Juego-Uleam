@@ -107,9 +107,21 @@ class View extends CanvasLayer:
 		var r := edge * 0.5
 		var k := minf(dist * 0.5, r)
 		split = dist * 0.5 > r
-		_line = move_toward(_line, 1.0 if split else 0.0, delta * 6.0)
 		var cams := [c1, c2]
 		var pos := [a + n * k, b - n * k]
+		# límites de la cámara (los del jugador 1): si el lugar cabe en la pantalla no se divide
+		var lim := Rect2()
+		if c1 and c1.limit_right - c1.limit_left < 100000:
+			lim = Rect2(c1.limit_left, c1.limit_top, c1.limit_right - c1.limit_left, c1.limit_bottom - c1.limit_top)
+		var view := Vector2(1280, 720) / zoom
+		if lim.size != Vector2.ZERO:
+			if lim.size.x <= view.x * 1.2 and lim.size.y <= view.y * 1.2:
+				split = false
+				var mid := (a + b) * 0.5
+				pos = [mid, mid]
+			for i in 2:
+				pos[i] = _clamp_to(pos[i], lim, view)
+		_line = move_toward(_line, 1.0 if split else 0.0, delta * 6.0)
 		for i in 2:
 			var cam: Camera2D = _cams[i]
 			cam.zoom = zoom
@@ -119,3 +131,15 @@ class View extends CanvasLayer:
 		_mat.set_shader_parameter("normal", n)
 		_mat.set_shader_parameter("split", 1.0 if split else 0.0)
 		_mat.set_shader_parameter("line", _line)
+
+	static func _clamp_to(p: Vector2, lim: Rect2, view: Vector2) -> Vector2:
+		var out := p
+		if lim.size.x > view.x:
+			out.x = clampf(p.x, lim.position.x + view.x * 0.5, lim.end.x - view.x * 0.5)
+		else:
+			out.x = lim.get_center().x
+		if lim.size.y > view.y:
+			out.y = clampf(p.y, lim.position.y + view.y * 0.5, lim.end.y - view.y * 0.5)
+		else:
+			out.y = lim.get_center().y
+		return out

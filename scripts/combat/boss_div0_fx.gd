@@ -5,6 +5,7 @@ extends RefCounted
 
 const GameFeel := preload("res://scripts/combat/game_feel.gd")
 const BossFx := preload("res://scripts/combat/boss_fx.gd")
+const CoopBoss := preload("res://scripts/combat/coop_boss.gd")
 const Spr := preload("res://scripts/combat/boss_sprites.gd")
 
 const OUT := Color(0.05, 0.05, 0.06)
@@ -38,18 +39,24 @@ class OrgChart extends BossFx.Hazard:
 				b.global_position = p
 				boxes.append(b)
 				GameFeel.dust(get_parent(), p, 4, Vector2.ZERO, 4.0, Vector2(26, 6))
-				if player_ok() and player_feet().distance_to(p) < 34.0:
-					hurt(1)
-		if t >= laser_at and t < life and _hit_cd <= 0.0 and player_ok():
-			for i in boxes.size() - 1:
-				if _alive(i) and _alive(i + 1):
-					var a: Vector2 = boxes[i].global_position + Vector2(0, -16)
-					var b: Vector2 = boxes[i + 1].global_position + Vector2(0, -16)
-					var q := Geometry2D.get_closest_point_to_segment(player_body() + Vector2(0, 20), a, b)
-					if q.distance_to(player_body() + Vector2(0, 20)) < 14.0:
-						_hit_cd = 0.8
+				for v in victims():
+					_victim = v
+					if player_feet().distance_to(p) < 34.0:
 						hurt(1)
-						break
+				_victim = null
+		if t >= laser_at and t < life:
+			for v in victims():
+				_victim = v
+				for i in boxes.size() - 1:
+					if _alive(i) and _alive(i + 1):
+						var a: Vector2 = boxes[i].global_position + Vector2(0, -16)
+						var b: Vector2 = boxes[i + 1].global_position + Vector2(0, -16)
+						var q := Geometry2D.get_closest_point_to_segment(player_body() + Vector2(0, 20), a, b)
+						if q.distance_to(player_body() + Vector2(0, 20)) < 14.0:
+							if cd_ok("laser", 0.8):
+								hurt(1)
+							break
+			_victim = null
 		if t >= life:
 			for b in boxes:
 				if is_instance_valid(b):
@@ -149,14 +156,23 @@ class AuditLens extends BossFx.Hazard:
 		var k := clampf(t / time, 0.0, 1.0)
 		var wob := Vector2(0, sin(k * TAU * 2.0) * 110.0)
 		global_position = path_a.lerp(path_b, k) + wob
-		if not _caught and player_ok():
-			var d := player_feet() - global_position
-			if Vector2(d.x, d.y * 1.6).length() < radius:
+		if not _caught:
+			var spotted: Node2D = null
+			for v in victims():
+				_victim = v
+				var d := player_feet() - global_position
+				if Vector2(d.x, d.y * 1.6).length() < radius:
+					spotted = v
+			_victim = null
+			if spotted != null:
 				_seen += delta
 				if _seen > 0.25:
 					_caught = true
+					_victim = spotted
 					hurt(1)
+					_victim = null
 					if is_instance_valid(boss):
+						boss.set("player", spotted)   # el foco marca al que encontró
 						boss.call("mark_player")
 			else:
 				_seen = maxf(0.0, _seen - delta)
@@ -217,11 +233,13 @@ class ShipContainer extends BossFx.Hazard:
 		if t < delay:
 			return
 		position.x += speed * delta
-		if not _hit and player_ok():
+		for v in victims():
+			_victim = v
 			var d := player_feet() - global_position
-			if absf(d.x) < 86.0 and absf(d.y) < 26.0:
+			if absf(d.x) < 86.0 and absf(d.y) < 26.0 and first_hit():
 				_hit = true
 				hurt(2)
+		_victim = null
 		if position.x < min_x or position.x > max_x:
 			queue_free()
 		if fmod(t, 0.1) < delta:
@@ -276,9 +294,13 @@ class NumberRain extends BossFx.Hazard:
 				d[0].y += d[2] * delta
 				if d[0].y > rect.end.y:
 					d[0].y = rect.position.y - randf_range(0, 60)
-			if not _hit and player_ok() and t > warn + 0.1 and rect.has_point(player_feet()):
-				_hit = true
-				hurt(1)
+			if t > warn + 0.1:
+				for v in victims():
+					_victim = v
+					if rect.has_point(player_feet()) and first_hit():
+						_hit = true
+						hurt(1)
+				_victim = null
 		if t > warn + active:
 			queue_free()
 		queue_redraw()
@@ -433,9 +455,11 @@ class Coin extends BossFx.Hazard:
 			get_parent().add_child.call_deferred(c)
 			c.position = global_position
 			vel = vel.rotated(randf_range(-0.3, 0.3))
-		if _hit_cd <= 0.0 and player_ok() and player_body().distance_to(global_position) < R + 14.0:
-			_hit_cd = 1.0
-			hurt(1)
+		for v in victims():
+			_victim = v
+			if player_body().distance_to(global_position) < R + 14.0 and cd_ok("coin", 1.0):
+				hurt(1)
+		_victim = null
 		if t > life:
 			modulate.a = clampf(1.0 - (t - life) / 0.3, 0.0, 1.0)
 			if t > life + 0.3:
@@ -527,12 +551,14 @@ class MegaCone extends BossFx.Hazard:
 	func _process(delta: float) -> void:
 		t += delta
 		var r := reach * clampf(t / 0.35, 0.0, 1.0)
-		if not _hit and player_ok():
+		for v in victims():
+			_victim = v
 			var d := player_feet() - global_position
 			var dd := Vector2(d.x, d.y / 0.6)
-			if dd.length() < r and absf(dir.angle_to(dd)) < half:
+			if dd.length() < r and absf(dir.angle_to(dd)) < half and first_hit():
 				_hit = true
 				hurt(2)
+		_victim = null
 		if t > 0.5:
 			queue_free()
 		queue_redraw()
@@ -616,6 +642,10 @@ class Briefcase extends CharacterBody2D:
 		_hit_t -= delta
 		if _dead:
 			queue_redraw()
+		if _hop_t <= 0.0:
+			for p in CoopBoss.targets(get_tree()):
+				if player == null or not is_instance_valid(player) or (p as Node2D).global_position.distance_to(global_position) < player.global_position.distance_to(global_position) - 20.0:
+					player = p
 		if _dead or player == null or not is_instance_valid(player):
 			return
 		if _hop_t > 0.0:

@@ -3,6 +3,7 @@ extends CharacterBody2D
 ## Sin class_name: cargar con preload.
 
 const GameFeel := preload("res://scripts/combat/game_feel.gd")
+const CoopBoss := preload("res://scripts/combat/coop_boss.gd")
 const Spr := preload("res://scripts/combat/boss_sprites.gd")
 
 const BITE_RANGE := 70.0
@@ -57,6 +58,13 @@ func _physics_process(delta: float) -> void:
 		velocity = _kb
 		move_and_slide()
 		_kb = _kb.move_toward(Vector2.ZERO, 900.0 * delta)
+	# multijugador: muerde al jugador más cercano
+	var near: Node2D = null
+	for p in CoopBoss.targets(get_tree()):
+		if near == null or (p as Node2D).global_position.distance_to(global_position) < near.global_position.distance_to(global_position):
+			near = p
+	if near != null and _tele <= 0.0:
+		player = near
 	if player == null or not is_instance_valid(player):
 		return
 	if _tele > 0.0:

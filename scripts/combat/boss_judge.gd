@@ -9,6 +9,7 @@ extends CharacterBody2D
 ## Sin class_name: cargar con preload.
 
 const GameFeel := preload("res://scripts/combat/game_feel.gd")
+const CoopBoss := preload("res://scripts/combat/coop_boss.gd")
 const Barrage := preload("res://scripts/combat/boss_barrage.gd")
 const BossFx := preload("res://scripts/combat/boss_fx.gd")
 const Fx := preload("res://scripts/combat/boss_judge_fx.gd")
@@ -260,6 +261,7 @@ func _clamp_inside() -> void:
 
 
 func _choose_attack() -> void:
+	CoopBoss.retarget(self)
 	var pick := ""
 	if shield and evidence >= NEED:
 		pick = "trial"
@@ -305,16 +307,29 @@ func _end_attack(tok: int, drops: bool = true) -> void:
 
 # --- Utilidades -----------------------------------------------------------------
 
+## Multijugador: jugador que se está revisando en un `for v in _victims()` (el daño es para todos).
+var _victim: Node2D = null
+
+
+func _victims() -> Array:
+	return CoopBoss.targets(get_tree()) if is_inside_tree() else []
+
+
+func _who() -> Node2D:
+	return _victim if _victim != null else player
+
+
 func _player_ok() -> bool:
-	return player != null and is_instance_valid(player)
+	var w := _who()
+	return w != null and is_instance_valid(w)
 
 
 func _player_body() -> Vector2:
-	return player.global_position + Vector2(0, -32)
+	return _who().global_position + Vector2(0, -32)
 
 
 func _player_feet() -> Vector2:
-	return player.global_position + Vector2(0, 12)
+	return _who().global_position + Vector2(0, 12)
 
 
 func _dir_to_player(from: Vector2) -> Vector2:
@@ -433,7 +448,7 @@ func _interrupt() -> void:
 func hurt_player(amount: int, from: Vector2, unblockable: bool = false) -> void:
 	if not _player_ok() or state == "dead" or state == "paused":
 		return
-	player.call("take_hit", amount, from, unblockable)
+	_who().call("take_hit", amount, from, unblockable)
 
 
 # --- La Evidencia -----------------------------------------------------------------

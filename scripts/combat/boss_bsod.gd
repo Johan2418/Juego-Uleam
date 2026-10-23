@@ -8,6 +8,7 @@ extends CharacterBody2D
 ## Sin class_name: cargar con preload.
 
 const GameFeel := preload("res://scripts/combat/game_feel.gd")
+const CoopBoss := preload("res://scripts/combat/coop_boss.gd")
 const Barrage := preload("res://scripts/combat/boss_barrage.gd")
 const BossFx := preload("res://scripts/combat/boss_fx.gd")
 const Fx := preload("res://scripts/combat/boss_bsod_fx.gd")
@@ -345,6 +346,7 @@ func _clamp_inside() -> void:
 
 
 func _choose_attack() -> void:
+	CoopBoss.retarget(self)
 	var pick := ""
 	if not _queue.is_empty():
 		pick = _queue.pop_front()
@@ -391,16 +393,29 @@ func _end_attack(tok: int) -> void:
 
 # --- Utilidades -----------------------------------------------------------------
 
+## Multijugador: jugador que se está revisando en un `for v in _victims()` (el daño es para todos).
+var _victim: Node2D = null
+
+
+func _victims() -> Array:
+	return CoopBoss.targets(get_tree()) if is_inside_tree() else []
+
+
+func _who() -> Node2D:
+	return _victim if _victim != null else player
+
+
 func _player_ok() -> bool:
-	return player != null and is_instance_valid(player)
+	var w := _who()
+	return w != null and is_instance_valid(w)
 
 
 func _player_body() -> Vector2:
-	return player.global_position + Vector2(0, -32)
+	return _who().global_position + Vector2(0, -32)
 
 
 func _player_feet() -> Vector2:
-	return player.global_position + Vector2(0, 12)
+	return _who().global_position + Vector2(0, 12)
 
 
 func _dir_to_player(from: Vector2) -> Vector2:
@@ -518,7 +533,7 @@ func _interrupt() -> void:
 func hurt_player(amount: int, from: Vector2, unblockable: bool = false) -> void:
 	if not _player_ok() or state == "dead" or state == "paused":
 		return
-	player.call("take_hit", amount, from, unblockable)
+	_who().call("take_hit", amount, from, unblockable)
 
 
 func _on_player_parried(_from: Vector2) -> void:
@@ -736,16 +751,20 @@ func _atk_scalpel(tok: int) -> void:
 	_impact(origin + aim * 110.0, 3.0)
 	if not await _wait(0.05, tok):
 		return
-	if _player_ok():
+	var _stun_any1 := false
+	for v in _victims():
+		_victim = v
 		var to := _player_body() - origin
 		if to.length() <= 190.0 and absf(aim.angle_to(to)) <= 1.1:
 			_was_parried = false
 			_parry_watch = true
 			hurt_player(2, origin)
 			_parry_watch = false
-			if _was_parried:
-				_arrhythmia_stun(3.0)
-				return
+			_stun_any1 = _stun_any1 or _was_parried
+	_victim = null
+	if _stun_any1:
+		_arrhythmia_stun(3.0)
+		return
 	if not await _wait(0.4, tok):
 		return
 	_end_attack(tok)
@@ -854,9 +873,12 @@ func _charge_step(delta: float) -> void:
 	gurney.scroll += DRILL_SPEED * delta
 	if randf() < 0.5:
 		GameFeel.dust(get_parent(), global_position + Vector2(randf_range(-60, 60), 0), 2, -_charge_dir * 60.0, 4.0)
-	if not _charge_hit and _player_ok() and _player_feet().distance_to(global_position + Vector2(0, -10)) < 80.0:
-		_charge_hit = true
-		hurt_player(2, global_position, true)
+	for v in _victims():
+		_victim = v
+		if _player_feet().distance_to(global_position + Vector2(0, -10)) < 80.0 and CoopBoss.once(self, "charge%d" % _tok, v):
+			_charge_hit = true
+			hurt_player(2, global_position, true)
+	_victim = null
 	_charge_left -= delta
 	for i in get_slide_collision_count():
 		if get_slide_collision(i).get_collider() is StaticBody2D:
@@ -1288,9 +1310,13 @@ class EcgSweep extends BossFx.Hazard:
 
 	func _process(delta: float) -> void:
 		t += delta
-		if t > warn and not _hit and player_ok() and absf(player_feet().y - _y()) < 16.0:
-			_hit = true
-			hurt(2, true)
+		if t > warn:
+			for v in victims():
+				_victim = v
+				if absf(player_feet().y - _y()) < 16.0 and first_hit():
+					_hit = true
+					hurt(2, true)
+			_victim = null
 		if t > warn + time + 0.2:
 			queue_free()
 		queue_redraw()

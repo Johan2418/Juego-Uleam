@@ -71,6 +71,9 @@ const IDLE_LONG_AFTER := 7.0      ## segundos quieto antes del reposo largo (si 
 var slot: int = 0
 ## Personaje de este jugador (null = el de GameState.appearance).
 var appearance: CharacterAppearance = null
+## Multijugador en la arena: al quedarse sin vida queda CAÍDO hasta que el compañero lo levante.
+var ko_mode: bool = false
+var coop_ko: bool = false
 var class_controller: Node
 var lock: Node   ## fijar objetivo (lock_on.gd)
 var character_id: String = ""
@@ -403,11 +406,31 @@ func take_hit(amount: int, from: Vector2, unblockable: bool = false) -> void:
 	if hp <= 0:
 		_knocked_down = true
 		_hurt_left = KNOCKDOWN_TIME
+		if ko_mode:
+			coop_ko = true
+			_hurt_left = 1.0e9   # se queda en el piso hasta revive()
 		_play("knockdown", true, 1.0)
 	else:
 		_hurt_left = HURT_TIME
 		_iframes_left = HURT_IFRAMES
 		_play("flinch", true, 1.0)
+
+
+## Multijugador: el compañero lo levantó.
+func revive(amount: int) -> void:
+	if not coop_ko:
+		return
+	coop_ko = false
+	_knocked_down = false
+	_hurt_left = 0.0
+	_hurt_vel = Vector2.ZERO
+	_lock_anim = false
+	hp = clampi(amount, 1, MAX_HP)
+	hp_changed.emit(hp, MAX_HP)
+	_iframes_left = HURT_IFRAMES * 2.0
+	_play_idle()
+	GameFeel.flash(anim, 0.3, Color(0.7, 1.0, 0.7))
+	Tech.float_text(get_parent(), global_position + Vector2(0, -96), "¡DE PIE!", Color(0.5, 1.0, 0.6), 22)
 
 
 ## Recupera corazones (técnicas Parásito y Desfibrilador).

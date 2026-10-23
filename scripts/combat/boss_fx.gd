@@ -5,28 +5,62 @@ extends RefCounted
 
 const GameFeel := preload("res://scripts/combat/game_feel.gd")
 const Spr := preload("res://scripts/combat/boss_sprites.gd")
+const CoopBoss := preload("res://scripts/combat/coop_boss.gd")
 
 
 ## Base: algo que puede dañar al jugador. El daño pasa por boss.hurt_player().
 class Hazard extends Node2D:
 	var boss: Node2D
+	## Objetivo del boss (a quién apunta / persigue el peligro).
 	var player: Node2D
+	## Multijugador: jugador que se está revisando en un `for v in victims()`. Mientras está
+	## puesto, player_ok/feet/body y hurt() se refieren a él (el daño es para todos).
+	var _victim: Node2D = null
 
 	func _init() -> void:
 		add_to_group("boss_hazard")
 
+	## Todos los jugadores que pueden recibir daño (1 o 2).
+	func victims() -> Array:
+		return CoopBoss.targets(get_tree()) if is_inside_tree() else []
+
+	func _who() -> Node2D:
+		return _victim if _victim != null else player
+
 	func hurt(amount: int, unblockable: bool = true) -> void:
-		if is_instance_valid(boss) and boss.has_method("hurt_player"):
+		if not is_instance_valid(boss) or not boss.has_method("hurt_player"):
+			return
+		if _victim != null and is_instance_valid(_victim):
+			CoopBoss.hurt_to(boss, _victim, amount, global_position, unblockable)
+		else:
 			boss.call("hurt_player", amount, global_position, unblockable)
 
 	func player_ok() -> bool:
-		return player != null and is_instance_valid(player)
+		var p := _who()
+		return p != null and is_instance_valid(p)
 
 	func player_feet() -> Vector2:
-		return player.global_position + Vector2(0.0, 12.0)
+		return _who().global_position + Vector2(0.0, 12.0)
 
 	func player_body() -> Vector2:
-		return player.global_position + Vector2(0.0, -32.0)
+		return _who().global_position + Vector2(0.0, -32.0)
+
+	## Proyectil: true si toca el cuerpo de algún jugador (queda como _victim para el parry y el daño).
+	func touch_any(radius: float) -> bool:
+		for v in victims():
+			_victim = v
+			if player_body().distance_to(global_position) < radius:
+				return true
+		_victim = null
+		return false
+
+	## Un golpe por jugador (antes: un golpe por peligro).
+	func first_hit(key: String = "hit") -> bool:
+		return CoopBoss.once(self, key, _who())
+
+	## Enfriamiento por jugador (antes: uno solo para el peligro).
+	func cd_ok(key: String, secs: float) -> bool:
+		return CoopBoss.ready_for(self, key, _who(), secs)
 
 	func ellipse(center: Vector2, r: Vector2, col: Color) -> void:
 		var pts := PackedVector2Array()
@@ -62,8 +96,11 @@ class FallingCrate extends Hazard:
 			return
 		if not _landed and lt >= warn:
 			_landed = true
-			if player_ok() and player_feet().distance_to(global_position) <= RADIUS:
-				hurt(1)
+			for v in victims():
+				_victim = v
+				if player_feet().distance_to(global_position) <= RADIUS:
+					hurt(1)
+			_victim = null
 			GameFeel.dust(get_parent(), global_position, 6, Vector2.ZERO, 5.0, Vector2(18.0, 5.0))
 		if lt >= warn + 0.55:
 			queue_free()
@@ -123,9 +160,11 @@ class GasCone extends Hazard:
 			var cur := dir.angle()
 			var diff := wrapf(want - cur, -PI, PI)
 			dir = Vector2.from_angle(cur + clampf(diff, -track_speed * delta, track_speed * delta))
-			if _tick <= 0.0 and _inside():
-				hurt(1)
-				_tick = 0.45
+			for v in victims():
+				_victim = v
+				if _inside() and cd_ok("gas", 0.45):
+					hurt(1)
+			_victim = null
 		if t >= life:
 			queue_free()
 		queue_redraw()
@@ -161,9 +200,12 @@ class Puddle extends Hazard:
 		t += delta
 		_tick -= delta
 		var lt := t - delay
-		if lt >= 0.0 and _tick <= 0.0 and player_ok() and player_feet().distance_to(global_position) <= RADIUS:
-			hurt(1)
-			_tick = 0.7
+		if lt >= 0.0:
+			for v in victims():
+				_victim = v
+				if player_feet().distance_to(global_position) <= RADIUS and cd_ok("puddle", 0.7):
+					hurt(1)
+			_victim = null
 		if lt >= life:
 			queue_free()
 		queue_redraw()
@@ -199,8 +241,11 @@ class RootSpike extends Hazard:
 		var lt := t - delay
 		if lt >= warn and not _hit:
 			_hit = true
-			if player_ok() and player_feet().distance_to(global_position) <= RADIUS:
-				hurt(1)
+			for v in victims():
+				_victim = v
+				if player_feet().distance_to(global_position) <= RADIUS:
+					hurt(1)
+			_victim = null
 			GameFeel.dust(get_parent(), global_position, 3, Vector2.ZERO, 3.5, Vector2(10.0, 3.0))
 		if lt >= warn + 0.75:
 			queue_free()
@@ -324,11 +369,13 @@ class Animal extends Hazard:
 		if t < delay:
 			return
 		position.x += speed * delta
-		if not _hit and player_ok():
+		for v in victims():
+			_victim = v
 			var d := player_feet() - global_position
-			if absf(d.x) < 34.0 and absf(d.y) < 24.0:
+			if absf(d.x) < 34.0 and absf(d.y) < 24.0 and first_hit():
 				_hit = true
 				hurt(1)
+		_victim = null
 		if position.x < min_x or position.x > max_x:
 			queue_free()
 		if fmod(t, 0.12) < delta:
@@ -392,13 +439,14 @@ class LaserBeam extends Hazard:
 				_start_angle = angle - sweep * 0.5 * dir_sign
 			var k := (t - telegraph) / duration
 			angle = _start_angle + sweep * k * dir_sign
-			if _hit_cd <= 0.0 and player_ok():
+			for v in victims():
+				_victim = v
 				var a := global_position
 				var b := a + Vector2.from_angle(angle) * length
 				var p := player_body()
-				if p.distance_to(Geometry2D.get_closest_point_to_segment(p, a, b)) < 18.0:
+				if p.distance_to(Geometry2D.get_closest_point_to_segment(p, a, b)) < 18.0 and cd_ok("laser", 0.6):
 					hurt(2)
-					_hit_cd = 0.6
+			_victim = null
 			if k >= 1.0:
 				queue_free()
 		queue_redraw()
@@ -512,7 +560,8 @@ class TeleZone extends Node2D:
 
 	func _shape(r: float) -> PackedVector2Array:
 		var pts := PackedVector2Array()
-		if half_angle <= 0.0:
+		# círculo si no es cono (o si el cono es casi una vuelta entera: se cruzaría y no se puede dibujar)
+		if half_angle <= 0.0 or half_angle >= PI * 0.95 or not dir.is_finite():
 			for i in 32:
 				var a := TAU * i / 32.0
 				pts.append(Vector2(cos(a) * r, sin(a) * r * 0.5))
@@ -527,8 +576,11 @@ class TeleZone extends Node2D:
 	func _draw() -> void:
 		var k := clampf(t / life, 0.0, 1.0)
 		var blink := 0.6 + 0.4 * absf(sin(t * 18.0))
+		if reach < 1.0 or not is_finite(reach):
+			return
 		draw_colored_polygon(_shape(reach), Color(1.0, 0.15, 0.1, 0.12 * blink))
-		draw_colored_polygon(_shape(reach * k), Color(1.0, 0.2, 0.1, 0.28))
+		if reach * k > 1.0:   # con radio 0 el polígono no se puede triangular
+			draw_colored_polygon(_shape(reach * k), Color(1.0, 0.2, 0.1, 0.28))
 		var edge := _shape(reach)
 		edge.append(edge[0])
 		draw_polyline(edge, Color(1.0, 0.35, 0.25, 0.8 * blink), 2.0)
@@ -546,12 +598,14 @@ class ShockRing extends Hazard:
 
 	func _process(delta: float) -> void:
 		r += speed * delta
-		if not _hit and player_ok():
+		for v in victims():
+			_victim = v
 			var d := player_feet() - global_position
 			var e := Vector2(d.x, d.y * 2.0).length()   # anillo aplastado (perspectiva)
-			if absf(e - r) < 22.0:
+			if absf(e - r) < 22.0 and first_hit():
 				_hit = true
 				hurt(2)
+		_victim = null
 		if r >= max_r:
 			queue_free()
 		queue_redraw()

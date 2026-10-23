@@ -4,6 +4,7 @@ extends RefCounted
 
 const GameFeel := preload("res://scripts/combat/game_feel.gd")
 const BossFx := preload("res://scripts/combat/boss_fx.gd")
+const CoopBoss := preload("res://scripts/combat/coop_boss.gd")
 const Spr := preload("res://scripts/combat/boss_sprites.gd")
 
 const OUT := Color(0.05, 0.05, 0.06)
@@ -27,16 +28,23 @@ class Syringe extends BossFx.Hazard:
 			queue_redraw()
 			return
 		global_position += dir * speed * delta
-		if not _done and player_ok() and player_body().distance_to(global_position) < 22.0:
-			_done = true
-			hurt(1, false)
-			if player.get("speed_mult") != null:
-				player.set("speed_mult", 0.5)
-				player.get_tree().create_timer(2.0).timeout.connect(func() -> void:
-					if is_instance_valid(player):
-						player.set("speed_mult", 1.0))
-			queue_free()
-			return
+		for v in victims():
+			if _done or (v as Node2D).global_position.distance_to(global_position) > 200.0:
+				continue
+			_victim = v
+			if player_body().distance_to(global_position) < 22.0:
+				_done = true
+				hurt(1, false)
+				var who: Node2D = v
+				if who.get("speed_mult") != null:
+					who.set("speed_mult", 0.5)
+					who.get_tree().create_timer(2.0).timeout.connect(func() -> void:
+						if is_instance_valid(who):
+							who.set("speed_mult", 1.0))
+				_victim = null
+				queue_free()
+				return
+		_victim = null
 		if t > delay + 2.5:
 			queue_free()
 		queue_redraw()
@@ -120,11 +128,13 @@ class ColorPuddle extends BossFx.Hazard:
 	func _process(delta: float) -> void:
 		t += delta
 		_cd -= delta
-		if t > 0.2 and _cd <= 0.0 and player_ok():
-			var d := player_feet() - global_position
-			if Vector2(d.x, d.y * 2.0).length() < 40.0:
-				_cd = 0.8
-				hurt(1)
+		if t > 0.2:
+			for v in victims():
+				_victim = v
+				var d := player_feet() - global_position
+				if Vector2(d.x, d.y * 2.0).length() < 40.0 and cd_ok("puddle", 0.8):
+					hurt(1)
+			_victim = null
 		if t > life:
 			queue_free()
 		queue_redraw()
@@ -166,9 +176,11 @@ class Ball extends BossFx.Hazard:
 			vel.y = -vel.y
 			GameFeel.dust(get_parent(), p, 3, Vector2.ZERO, 4.0)
 		global_position = Vector2(clampf(p.x, arena.position.x + R, arena.end.x - R), clampf(p.y, arena.position.y + R + 20.0, arena.end.y - 4.0))
-		if _cd <= 0.0 and player_ok() and player_feet().distance_to(global_position) < R + 14.0:
-			_cd = 0.8
-			hurt(1)
+		for v in victims():
+			_victim = v
+			if player_feet().distance_to(global_position) < R + 14.0 and cd_ok("ball", 0.8):
+				hurt(1)
+		_victim = null
 		if t > life:
 			modulate.a = clampf(1.0 - (t - life) / 0.4, 0.0, 1.0)
 			if t > life + 0.4:
@@ -208,16 +220,19 @@ class Food extends BossFx.Hazard:
 			return
 		if not _landed and lt >= warn:
 			_landed = true
-			if player_ok() and player_feet().distance_to(global_position) <= RADIUS:
-				if healthy:
-					var mx: int = player.get("MAX_HP") if player.get("MAX_HP") != null else 10
-					var hp: int = player.get("hp")
-					if hp < mx:
-						player.set("hp", hp + 1)
-						player.emit_signal("hp_changed", hp + 1, mx)
-					GameFeel.parry_burst(get_parent(), global_position + Vector2(0, -20), 22.0)
-				else:
-					hurt(1)
+			for v in victims():
+				_victim = v
+				if player_feet().distance_to(global_position) <= RADIUS:
+					if healthy:
+						var mx: int = v.get("MAX_HP") if v.get("MAX_HP") != null else 10
+						var hp: int = v.get("hp")
+						if hp < mx:
+							v.set("hp", hp + 1)
+							v.emit_signal("hp_changed", hp + 1, mx)
+						GameFeel.parry_burst(get_parent(), global_position + Vector2(0, -20), 22.0)
+					else:
+						hurt(1)
+			_victim = null
 			GameFeel.dust(get_parent(), global_position, 4, Vector2.ZERO, 4.0, Vector2(14, 4))
 		if lt >= warn + 0.5:
 			queue_free()
@@ -428,10 +443,12 @@ class BlockTrap extends BossFx.Hazard:
 		_key_node.position = block_pos(_key) + Vector2(0, -14)
 		if not _done and t >= close_time:
 			_done = true
-			if player_ok():
+			for v in victims():
+				_victim = v
 				var d := player_feet() - global_position
 				if Vector2(d.x, d.y / 0.6).length() < r0 * 0.9:
 					hurt(2)
+			_victim = null
 			GameFeel.dust(get_parent(), global_position, 10, Vector2.ZERO, 6.0, Vector2(40, 12))
 			var tw := create_tween()
 			tw.tween_interval(0.3)
@@ -512,6 +529,11 @@ class Bacteria extends CharacterBody2D:
 
 	func _physics_process(delta: float) -> void:
 		t += delta
+		# multijugador: persigue al jugador más cercano (cuando no está saltando)
+		if _jump_t <= 0.0:
+			for p in CoopBoss.targets(get_tree()):
+				if player == null or not is_instance_valid(player) or (p as Node2D).global_position.distance_to(global_position) < player.global_position.distance_to(global_position) - 20.0:
+					player = p
 		if _dead or player == null or not is_instance_valid(player):
 			return
 		if _jump_t > 0.0:

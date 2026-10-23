@@ -5,6 +5,7 @@ extends RefCounted
 
 const GameFeel := preload("res://scripts/combat/game_feel.gd")
 const BossFx := preload("res://scripts/combat/boss_fx.gd")
+const CoopBoss := preload("res://scripts/combat/coop_boss.gd")
 const Spr := preload("res://scripts/combat/boss_sprites.gd")
 
 const OUT := Color(0.05, 0.05, 0.06)
@@ -237,11 +238,12 @@ class FireFood extends BossFx.Hazard:
 				GameFeel.dust(get_parent(), to, 4, Vector2.ZERO, 4.0, Vector2(24, 8))
 		else:
 			_tick -= delta
-			if _tick <= 0.0 and player_ok() and not bool(player.get("rolling")):
+			for v in victims():
+				_victim = v
 				var d := player_feet() - to
-				if Vector2(d.x, d.y * 2.0).length() < RADIUS:
-					_tick = 0.8
+				if not bool(v.get("rolling")) and Vector2(d.x, d.y * 2.0).length() < RADIUS and cd_ok("burn", 0.8):
 					hurt(1)
+			_victim = null
 			if t > flight + burn:
 				queue_free()
 		queue_redraw()
@@ -438,18 +440,19 @@ class Paparazzi extends CharacterBody2D:
 
 	func _shoot() -> void:
 		_flash = 0.25
-		if player == null or not is_instance_valid(player):
-			return
-		var d := player.global_position - global_position
-		if Vector2(d.x, d.y * 1.6).length() < FLASH_R and not bool(player.get("rolling")):
-			player.call("take_hit", 1, global_position)
-			if "speed_mult" in player:
-				player.set("speed_mult", 0.0)
-				var tw := player.create_tween()
-				tw.tween_interval(0.4)
-				tw.tween_callback(func():
-					if is_instance_valid(player) and float(player.get("speed_mult")) == 0.0:
-						player.set("speed_mult", 1.0))
+		# el flash ciega a todos los que estén cerca
+		for who in CoopBoss.targets(get_tree()):
+			var pl: Node2D = who
+			var d := pl.global_position - global_position
+			if Vector2(d.x, d.y * 1.6).length() < FLASH_R and not bool(pl.get("rolling")):
+				pl.call("take_hit", 1, global_position)
+				if "speed_mult" in pl:
+					pl.set("speed_mult", 0.0)
+					var tw := pl.create_tween()
+					tw.tween_interval(0.4)
+					tw.tween_callback(func():
+						if is_instance_valid(pl) and float(pl.get("speed_mult")) == 0.0:
+							pl.set("speed_mult", 1.0))
 
 	func _draw() -> void:
 		var idx := 0
@@ -518,10 +521,12 @@ class Kernel extends BossFx.Hazard:
 		t += delta
 		if not _popped and t >= delay + warn:
 			_popped = true
-			if player_ok():
+			for v in victims():
+				_victim = v
 				var d := player_feet() - global_position
 				if Vector2(d.x, d.y * 2.0).length() < RADIUS:
 					hurt(1)
+			_victim = null
 			for i in 3:
 				var p := Popped.new()
 				p.vel = Vector2(randf_range(-160, 160), randf_range(-320, -160))
@@ -565,10 +570,12 @@ class Knife extends BossFx.Hazard:
 		t += delta
 		if not _landed and t >= delay + warn:
 			_landed = true
-			if player_ok():
+			for v in victims():
+				_victim = v
 				var d := player_feet() - global_position
 				if Vector2(d.x, d.y * 2.0).length() < RADIUS + 10.0:
 					hurt(1)
+			_victim = null
 		if t >= delay + warn + 0.6:
 			queue_free()
 		queue_redraw()
@@ -607,12 +614,14 @@ class SoundRing extends BossFx.Hazard:
 
 	func _process(delta: float) -> void:
 		r += speed * delta
-		if not _hit and player_ok() and not bool(player.get("rolling")):
+		for v in victims():
+			_victim = v
 			var d := player_feet() - global_position
 			var e := Vector2(d.x, d.y * 2.0).length()
-			if absf(e - r) < 20.0:
+			if not bool(v.get("rolling")) and absf(e - r) < 20.0 and first_hit():
 				_hit = true
 				hurt(1)
+		_victim = null
 		if r >= max_r:
 			queue_free()
 		queue_redraw()

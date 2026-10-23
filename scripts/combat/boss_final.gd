@@ -99,7 +99,7 @@ class Shot extends BossFx.Hazard:
 				else:
 					queue_free()
 				return
-		elif not _done and player_ok() and player_body().distance_to(global_position) < 26.0:
+		elif not _done and _touching():
 			_done = true
 			var r := _parry()
 			if r == 1:
@@ -115,6 +115,7 @@ class Shot extends BossFx.Hazard:
 					n.color = Color(1, 0.5, 0.3)
 					get_parent().add_child(n)
 					n.global_position = global_position + Vector2(0, -30)
+			_victim = null
 			if is_instance_valid(boss) and boss.has_method(on_result):
 				boss.call(on_result, r == 1, self)
 			if r != 1:
@@ -128,9 +129,18 @@ class Shot extends BossFx.Hazard:
 			return
 		queue_redraw()
 
+	## Multijugador: la bola choca con el primer jugador que toque (queda como _victim para el parry y el daño).
+	func _touching() -> bool:
+		for v in victims():
+			_victim = v
+			if player_body().distance_to(global_position) < 26.0:
+				return true
+		_victim = null
+		return false
+
 	## 1 = parry bueno, 0 = sin parry, -1 = parry impreciso (fuera de `strict`).
 	func _parry() -> int:
-		var cc: Variant = player.get("class_controller")
+		var cc: Variant = _who().get("class_controller")
 		if cc == null or not is_instance_valid(cc):
 			return 0
 		if not (bool(cc.get("parrying")) and bool(cc.call("parry_covers", global_position))):
