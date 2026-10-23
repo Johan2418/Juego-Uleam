@@ -839,6 +839,17 @@ func _enable_hitbox() -> void:
 	hitbox.monitoring = true
 	for body in hitbox.get_overlapping_bodies():
 		_on_hitbox_body(body)
+	# Lo que ya estaba dentro del golpe al activarlo (p. ej. una cámara o un objeto con Area2D)
+	# a veces no dispara area_entered: se revisa a mano un par de cuadros después.
+	var tok := _action_token
+	for i in 2:
+		await player.get_tree().physics_frame
+		if not _hit_active or tok != _action_token or not is_instance_valid(hitbox):
+			return
+		for area in hitbox.get_overlapping_areas():
+			_on_hitbox_area(area)
+		for body in hitbox.get_overlapping_bodies():
+			_on_hitbox_body(body)
 
 
 func _disable_hitbox() -> void:

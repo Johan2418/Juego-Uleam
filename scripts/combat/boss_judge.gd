@@ -2070,31 +2070,102 @@ func _climax_clear() -> void:
 		h.queue_free()
 
 
+## Punto delante del boss (del lado de los jugadores) donde se paran a golpearlo en el clímax.
+func _front(radius: float) -> Vector2:
+	var at := global_position + Vector2(0, 160)
+	var vs := _victims()
+	if not vs.is_empty():
+		at = Vector2.ZERO
+		for v in vs:
+			at += (v as Node2D).global_position
+		at /= vs.size()
+	# de frente (abajo del boss), apenas corrido hacia el lado de donde vienen
+	var dx := clampf(at.x - global_position.x, -radius * 0.45, radius * 0.45)
+	return Epic.melee_spot(self, global_position + Vector2(dx, radius * 2.0), radius, arena_rect)
+
+
+## Centro de los jugadores (para apuntar lo que se les lanza en el clímax).
+func _team_body() -> Vector2:
+	var vs := _victims()
+	if vs.is_empty():
+		return global_position + Vector2(0, 160)
+	var at := Vector2.ZERO
+	for v in vs:
+		at += (v as Node2D).global_position
+	return at / vs.size() + Vector2(0, -34)
+
+
 func _gpos(part: Node2D) -> Vector2:
 	return part.global_position if part and is_instance_valid(part) else global_position + CENTER
 
 
-## ¡OBJECIÓN!: peloteo final a toda velocidad (parry en cada sello) y la objeción que rompe el escudo.
+## ¡OBJECIÓN!: peloteo final: el juez lanza sellos con el mazo al ritmo y el personaje hace parry a cada uno
+## (se ven ir y volver); al final, un sello gigante: parry = ¡OBJECIÓN! y se le rompe el escudo.
 func _climax() -> bool:
 	_climax_clear()
 	var p := get_parent()
 	var red := Color(1.0, 0.35, 0.3)
+	var beats := [1.0, 1.55, 2.0, 2.35, 2.65]
+	var flying: Array = []
+	var failed := [false]
+	var big: Array = [null]
+	var seal_tex: Texture2D = Spr.tex("boss_judge_evidence_4")
 	var steps := [
-		{"mode": "rhythm", "action": "parry", "title": "¡PELOTEO FINAL!", "sub": "Parry a cada sello", "beats": [1.0, 1.55, 2.0, 2.35, 2.65],
-			"window": 0.16, "col": red,
+		{"mode": "rhythm", "action": "parry", "title": "¡PELOTEO FINAL!", "sub": "Parry a cada sello cuando llegue", "beats": beats,
+			"window": 0.17, "col": red,
+			"go": func() -> Vector2: return _front(230.0),
+			"look": func() -> Vector2: return _gpos(hand),
+			"act": "parry",
 			"before": func() -> void:
-				await get_tree().create_timer(0.3).timeout,
+				await get_tree().create_timer(0.3).timeout
+				# cada sello sale del mazo y llega al jugador justo en su pulso (tiempo real)
+				for bt in beats:
+					var when: float = float(bt) - 0.5
+					get_tree().create_timer(maxf(0.01, when), true, false, true).timeout.connect(func() -> void:
+						if failed[0] or not is_inside_tree():
+							return
+						_tw(gavel, "rotation", 0.2, 0.06)
+						var s := Epic.fly(p, _gpos(hand), _team_body(), 0.5, "", seal_tex, 0.8, 9.0, 40.0)
+						flying.append(s)
+						s.arrived.connect(func() -> void:
+							if failed[0] or not is_instance_valid(s):
+								if is_instance_valid(s):
+									s.pop()
+								return
+							GameFeel.parry_burst(p, s.global_position, 26.0)
+							s.spin = -12.0
+							s.go(_gpos(hand), 0.32, 30.0)
+							s.arrived.connect(func() -> void:
+								if is_instance_valid(s):
+									GameFeel.parry_burst(p, s.global_position, 20.0)
+									_tw(gavel, "rotation", PI * 0.95, 0.06)
+									s.pop(), CONNECT_ONE_SHOT), CONNECT_ONE_SHOT)),
 			"pressed": func() -> void:
-				_tw(gavel, "rotation", PI * 0.95 if randf() < 0.5 else 0.2, 0.08)
-				GameFeel.parry_burst(p, _gpos(hand), 30.0)
-				Epic.ring(p, _gpos(hand), red, 160.0, 0.3, 6.0)
-				_shake(2.5, 0.08),
-			"ok": func() -> void:
-				pass},
-		{"mode": "timing", "action": "parry", "title": "¡OBJECIÓN!", "sub": "", "dur": 0.95, "col": red,
+				Epic.ring(p, _team_body(), red, 120.0, 0.25, 5.0)
+				_shake(2.0, 0.06),
+			"fail": func() -> void:
+				failed[0] = true
+				for s in flying:
+					if is_instance_valid(s):
+						(s as Epic.Fly).pop()
+				_climax_hurt(1, _gpos(hand))},
+		{"mode": "timing", "action": "parry", "title": "¡OBJECIÓN!", "sub": "El sello final viene con todo", "dur": 1.0, "col": red,
+			"look": func() -> Vector2: return _gpos(core),
+			"act": "parry",
 			"before": func() -> void:
-				Epic.charge(p, _gpos(core), red, 0.45, 160.0, core),
+				_tw(gavel, "rotation", PI * 0.95, 0.25)
+				Epic.charge(p, _gpos(hand), red, 0.4, 140.0, hand)
+				await get_tree().create_timer(0.45).timeout
+				_tw(gavel, "rotation", 0.2, 0.08)
+				var s := Epic.fly(p, _gpos(hand), _team_body(), 0.75, "", seal_tex, 1.6, 6.0, 50.0)
+				big[0] = s,
 			"ok": func() -> void:
+				var s: Epic.Fly = big[0]
+				GameFeel.parry_burst(p, s.global_position, 44.0)
+				s.spin = -16.0
+				s.go(_gpos(core), 0.3, 20.0)
+				await s.arrived
+				s.pop()
 				Epic.anim(p, "judge", "fxseal", _gpos(core), 1.4)
 				Epic.flash(p, Color(1, 1, 1), 0.5, 0.4)
 				Epic.word(p, _gpos(core) + Vector2(0, -90), "¡OBJECIÓN!", red, 64, 1.2)
@@ -2103,6 +2174,13 @@ func _climax() -> bool:
 				_shake(9.0, 0.35)
 				await get_tree().create_timer(0.4).timeout,
 			"fail": func() -> void:
+				var s: Epic.Fly = big[0]
+				if s and is_instance_valid(s):
+					s.pop()
 				_climax_hurt(2, _gpos(core))},
 	]
-	return await Epic.climax(self, steps)
+	var won := await Epic.climax(self, steps)
+	for s in flying:
+		if is_instance_valid(s):
+			(s as Node).queue_free()
+	return won

@@ -1971,11 +1971,37 @@ func _climax_clear() -> void:
 		h.queue_free()
 
 
+## Punto delante del boss (del lado de los jugadores) donde se paran a golpearlo en el clímax.
+func _front(radius: float) -> Vector2:
+	var at := global_position + Vector2(0, 160)
+	var vs := _victims()
+	if not vs.is_empty():
+		at = Vector2.ZERO
+		for v in vs:
+			at += (v as Node2D).global_position
+		at /= vs.size()
+	# de frente (abajo del boss), apenas corrido hacia el lado de donde vienen
+	var dx := clampf(at.x - global_position.x, -radius * 0.45, radius * 0.45)
+	return Epic.melee_spot(self, global_position + Vector2(dx, radius * 2.0), radius, arena_rect)
+
+
+## Centro de los jugadores (para apuntar lo que se les lanza en el clímax).
+func _team_body() -> Vector2:
+	var vs := _victims()
+	if vs.is_empty():
+		return global_position + Vector2(0, 160)
+	var at := Vector2.ZERO
+	for v in vs:
+		at += (v as Node2D).global_position
+	return at / vs.size() + Vector2(0, -34)
+
+
 func _gpos(part: Node2D) -> Vector2:
 	return part.global_position if part and is_instance_valid(part) else global_position + CENTER
 
 
-## PREGUNTA FINAL: responde con los botones en orden y entrega el examen a tiempo.
+## PREGUNTA FINAL: el personaje corre hasta la pizarra; cada respuesta es un golpe a la pizarra
+## (botones en orden) y el último golpe entrega el examen.
 func _climax() -> bool:
 	_climax_clear()
 	var p := get_parent()
@@ -1986,16 +2012,22 @@ func _climax() -> bool:
 	var chalk := Color(0.95, 0.95, 0.85)
 	var steps := [
 		{"mode": "sequence", "action": "action_primary", "title": "¡RESPONDE LA PREGUNTA FINAL!", "sub": "Pulsa los botones en orden",
-			"seq": seq, "limit": 4.0, "col": Color(0.5, 1.0, 0.55),
+			"seq": seq, "limit": 4.5, "col": Color(0.5, 1.0, 0.55),
+			"go": func() -> Vector2: return _front(100.0),
+			"look": func() -> Vector2: return _gpos(board),
+			"act": "attack",
 			"before": func() -> void:
 				Epic.charge(p, _gpos(board), chalk, 0.5, 150.0, board)
 				await get_tree().create_timer(0.3).timeout,
 			"pressed": func() -> void:
 				Epic.burst(p, _gpos(board), chalk, 10, 240.0, 0.3, 0.45)
+				Epic.word(p, _gpos(board) + Vector2(randf_range(-70, 70), randf_range(-50, 10)), "✓", Color(0.5, 1.0, 0.55), 30, 0.5)
 				_shake(1.5, 0.06),
 			"ok": func() -> void:
 				Epic.word(p, _gpos(board) + Vector2(0, -80), "¡CORRECTO!", Color(0.5, 1.0, 0.55), 44)},
 		{"mode": "timing", "action": "action_primary", "title": "¡ENTREGA EL EXAMEN!", "sub": "Antes de que suene el timbre", "dur": 1.0, "col": chalk,
+			"look": func() -> Vector2: return _gpos(board),
+			"act": "attack",
 			"ok": func() -> void:
 				Epic.anim(p, "syntax", "fxink", _gpos(board), 1.4)
 				Epic.ring(p, _gpos(board), Color(0.5, 1.0, 0.55), 320.0, 0.5, 12.0)

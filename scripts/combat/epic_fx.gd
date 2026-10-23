@@ -197,6 +197,19 @@ static func cinema(parent: Node) -> CinemaBars:
 
 ## Golpe grande "completo": onda, chispas, (flash y zoom si es fuerte) y quemadura.
 ## kind/prefix: efecto animado de grokbot del boss (si existe, sale encima en los golpes fuertes).
+## Punto delante del boss (hacia el jugador) para golpearlo de cerca, dentro de la arena.
+static func melee_spot(boss: Node2D, from: Vector2, radius: float = 105.0, arena: Rect2 = Rect2()) -> Vector2:
+	var base := boss.global_position
+	var d := from - base
+	if d.length() < 1.0:
+		d = Vector2.DOWN
+	d = Vector2(d.x, maxf(d.y, -0.2 * absf(d.x))).normalized()   # nunca por detrás del boss
+	var at := base + Vector2(d.x * radius * 1.15, d.y * radius * 0.8 + 10.0)
+	if arena.size != Vector2.ZERO:
+		at = Vector2(clampf(at.x, arena.position.x + 40.0, arena.end.x - 40.0), clampf(at.y, arena.position.y + 60.0, arena.end.y - 30.0))
+	return at
+
+
 static func big_hit(parent: Node, at: Vector2, col: Color, strength: float, kind: String = "", prefix: String = "") -> void:
 	if kind != "" and strength >= 4.0:
 		anim(parent, kind, prefix, at + Vector2(0, -20), clampf(0.5 + strength * 0.08, 0.6, 1.3))
@@ -225,17 +238,31 @@ static func qte(parent: Node, mode: String, action: String, title: String, opts:
 
 ## Encadena pasos de QTE en cámara lenta con barras de cine. Cada paso es un diccionario:
 ##   {mode, action, title, ...opciones del Qte, "zoom": 1.15, "slow": 0.35,
+##    "go": Callable -> Vector2 (los jugadores CORREN hasta ahí antes del QTE, sin teletransporte),
+##    "look": Callable -> Vector2 (punto al que miran / atacan),
+##    "act": "attack" | "parry" | "roll" | "" (lo que hace el personaje en cada pulsación),
+##    "roll_dir": Vector2 (para "roll"),
 ##    "before": Callable (antes del QTE), "pressed": Callable (cada pulsación), "ok": Callable, "fail": Callable}
-## Devuelve true si se superaron todos. Siempre deja el tiempo y la cámara como estaban.
+## Durante el clímax los personajes son "títeres": no se mueven con el control, hacen lo que pide el QTE.
+## Devuelve true si se superaron todos. Siempre deja el tiempo, la cámara y los controles como estaban.
 static func climax(boss: Node, steps: Array) -> bool:
 	var tree := boss.get_tree()
 	var bars := cinema(boss.get_parent())
+	var actors := grab(tree)
 	var win := true
 	for st in steps:
 		var s: Dictionary = st
 		if not is_instance_valid(boss) or not boss.is_inside_tree():
 			win = false
 			break
+		if s.has("go"):
+			var dest: Vector2 = (s["go"] as Callable).call()
+			await run_group(actors, spots(actors, dest), float(s.get("run_speed", 420.0)))
+		var look: Callable = s.get("look", Callable())
+		if look.is_valid():
+			for a in actors:
+				if is_instance_valid(a):
+					face(a, (look.call() as Vector2) - (a as Node2D).global_position)
 		if s.has("before"):
 			await (s["before"] as Callable).call()
 		if not is_instance_valid(boss) or not boss.is_inside_tree():
@@ -245,9 +272,17 @@ static func climax(boss: Node, steps: Array) -> bool:
 		cam_focus(tree, (boss as Node2D).global_position + Vector2(0, -90))
 		Engine.time_scale = float(s.get("slow", 0.35))
 		var opts := s.duplicate()
-		for k in ["mode", "action", "title", "zoom", "slow", "before", "pressed", "ok", "fail"]:
+		for k in ["mode", "action", "title", "zoom", "slow", "before", "pressed", "ok", "fail", "go", "look", "act", "roll_dir", "run_speed"]:
 			opts.erase(k)
 		var q := qte(boss.get_parent(), str(s.get("mode", "timing")), str(s.get("action", "action_primary")), str(s.get("title", "")), opts)
+		var kind := str(s.get("act", ""))
+		if kind != "":
+			var rd: Vector2 = s.get("roll_dir", Vector2.RIGHT)
+			q.pressed.connect(func() -> void:
+				for a in actors:
+					if is_instance_valid(a):
+						var to: Vector2 = (look.call() as Vector2) if look.is_valid() else (boss as Node2D).global_position
+						act(a, kind, rd if kind == "roll" else to - (a as Node2D).global_position))
 		if s.has("pressed"):
 			q.pressed.connect(s["pressed"])
 		var ok: bool = await q.done
@@ -264,7 +299,158 @@ static func climax(boss: Node, steps: Array) -> bool:
 	cam_reset(tree, 0.5)
 	if bars and is_instance_valid(bars):
 		bars.close()
+	release(actors)
 	return win
+
+
+# ---------------------------------------------------------------- títeres (cinemáticas con el jugador)
+
+## Toma el control de los jugadores en pie (no caídos) para una cinemática. Devuelve la lista.
+static func grab(tree: SceneTree) -> Array:
+	var out: Array = []
+	if tree == null:
+		return out
+	for p in tree.get_nodes_in_group("player"):
+		var pl := p as CharacterBody2D
+		if pl == null or not pl.is_inside_tree() or bool(pl.get("coop_ko")):
+			continue
+		pl.set_meta("epic_puppet", true)
+		pl.set_physics_process(false)
+		pl.set_process_unhandled_input(false)
+		pl.velocity = Vector2.ZERO
+		if bool(pl.get("rolling")):
+			pl.call("_end_roll")
+		pl.set("running", false)
+		var cc: Node = pl.get("class_controller")
+		if cc and bool(cc.get("busy")):
+			cc.call("cancel_action")
+		out.append(pl)
+	out.sort_custom(func(a: Node2D, b: Node2D) -> bool: return a.global_position.x < b.global_position.x)
+	return out
+
+
+## Devuelve el control (si la arena no lo tiene bloqueado por otra cosa: victoria / derrota).
+static func release(actors: Array) -> void:
+	for a in actors:
+		var pl := a as CharacterBody2D
+		if pl == null or not is_instance_valid(pl) or not pl.has_meta("epic_puppet"):
+			continue
+		pl.remove_meta("epic_puppet")
+		var arena := pl.get_parent()
+		if arena and bool(arena.get("_over")):
+			continue
+		pl.set_physics_process(true)
+		pl.set_process_unhandled_input(true)
+		var spr := pl.get("anim") as AnimatedSprite2D
+		if spr:
+			spr.speed_scale = 1.0
+			spr.rotation = 0.0
+
+
+## Puestos alrededor de un punto: 1 jugador en el punto, 2 jugadores uno a cada lado.
+static func spots(actors: Array, center: Vector2, gap: float = 76.0) -> Array:
+	var out: Array = []
+	for i in actors.size():
+		out.append(center + Vector2((i - (actors.size() - 1) * 0.5) * gap, 0.0))
+	return out
+
+
+## Mira hacia `dir` (con su pose de reposo).
+static func face(p: Node2D, dir: Vector2) -> void:
+	if dir.length() < 0.01:
+		return
+	p.call("_update_facing", dir.normalized())
+	p.set("_walk_dir", CharacterSprites.walk_dir_for(dir.normalized(), str(p.get("facing_name"))))
+	var spr := p.get("anim") as AnimatedSprite2D
+	if spr:
+		spr.speed_scale = 1.0
+		spr.rotation = 0.0
+	p.call("_play_idle")
+
+
+## Los jugadores CORREN (animación de caminar acelerada, polvo) hasta sus puestos. dash = rápido con estela.
+static func run_group(actors: Array, dests: Array, speed: float = 420.0, dash: bool = false) -> void:
+	if actors.is_empty():
+		return
+	var tree := (actors[0] as Node).get_tree()
+	var left := 4.0
+	var dust := 0.0
+	var ghost := 0.0
+	while left > 0.0:
+		await tree.physics_frame
+		var dt := 1.0 / maxf(1.0, float(Engine.physics_ticks_per_second))
+		left -= dt
+		dust -= dt
+		ghost -= dt
+		var moving := false
+		for i in actors.size():
+			var p := actors[i] as Node2D
+			if p == null or not is_instance_valid(p) or not p.is_inside_tree():
+				continue
+			var to: Vector2 = dests[mini(i, dests.size() - 1)]
+			var d := to - p.global_position
+			if d.length() <= speed * dt + 0.5:
+				if p.has_meta("epic_running"):
+					p.remove_meta("epic_running")
+					p.global_position = to
+					face(p, d if d.length() > 0.01 else Vector2(p.get("facing_vec")))
+				continue
+			moving = true
+			var v := d.normalized()
+			p.global_position += v * speed * dt
+			if not p.has_meta("epic_running") or fmod(left, 0.15) < dt:
+				p.set_meta("epic_running", true)
+				p.call("_update_facing", v)
+				p.set("_walk_dir", CharacterSprites.walk_dir_for(v, str(p.get("facing_name"))))
+				p.call("_play_walk")
+			var spr := p.get("anim") as AnimatedSprite2D
+			if spr:
+				spr.speed_scale = 2.4 if dash else 1.8
+				spr.rotation = lerpf(spr.rotation, clampf(v.x, -1.0, 1.0) * (0.14 if dash else 0.08), 0.3)
+				if dash and ghost <= 0.0:
+					GameFeel.afterimage(p.get_parent(), spr)
+			if dust <= 0.0:
+				GameFeel.dust(p.get_parent(), p.global_position + Vector2(0, 12), 2, -v * 50.0, 3.0, Vector2(6.0, 2.0))
+		if dust <= 0.0:
+			dust = 0.1
+		if ghost <= 0.0:
+			ghost = 0.04
+		if not moving:
+			break
+	for a in actors:
+		if is_instance_valid(a) and (a as Node).has_meta("epic_running"):
+			(a as Node).remove_meta("epic_running")
+
+
+## El personaje hace una acción de verdad (su propia animación de clase): "attack", "parry" o "roll".
+static func act(p: Node2D, kind: String, dir: Vector2) -> void:
+	var cc: Node = p.get("class_controller")
+	if cc == null or not is_instance_valid(p):
+		return
+	var d := dir.normalized() if dir.length() > 0.01 else Vector2(p.get("facing_vec"))
+	match kind:
+		"attack":
+			cc.call("cancel_action")
+			p.call("_update_facing", d)
+			p.set("_walk_dir", CharacterSprites.walk_dir_for(d, str(p.get("facing_name"))))
+			cc.call("set_facing", d)
+			cc.call("try_primary")
+		"parry":
+			cc.call("cancel_action")
+			p.call("_update_facing", d)
+			p.set("_walk_dir", CharacterSprites.walk_dir_for(d, str(p.get("facing_name"))))
+			cc.call("set_facing", d)
+			cc.call("try_parry")
+		"roll":
+			cc.call("cancel_action")
+			p.set("facing_vec", d)
+			p.set_physics_process(true)    # la rodada usa el movimiento propio del personaje
+			p.call("_try_roll")
+			var pl := p
+			p.get_tree().create_timer(0.42).timeout.connect(func() -> void:
+				if is_instance_valid(pl) and pl.has_meta("epic_puppet"):
+					pl.set_physics_process(false)
+					pl.set("velocity", Vector2.ZERO))
 
 
 # ================================================================== clases
@@ -671,6 +857,93 @@ class Anim extends Node2D:
 		draw_set_transform(Vector2.ZERO)
 
 
+## Objeto que vuela de A a B en tiempo REAL (sirve en cámara lenta, para que llegue justo en la
+## ventana del QTE): sello, lingote de oro... `shape`: "gold" (lingote) o una textura en `tex`.
+class Fly extends Node2D:
+	signal arrived
+	var tex: Texture2D
+	var shape := ""
+	var col := Color(1, 0.85, 0.3)
+	var k := 1.0
+	var spin := 0.0
+	var from := Vector2.ZERO
+	var to := Vector2.ZERO
+	var time := 0.8
+	var arc := 0.0            ## altura de la parábola
+	var t := 0.0
+	var _done := false
+	var _dead := 0.0
+	var _rot := 0.0
+
+	func _ready() -> void:
+		z_index = 18
+		z_as_relative = false
+		process_mode = Node.PROCESS_MODE_ALWAYS
+		global_position = from
+
+	## Vuelve a volar desde donde está hasta `dest` (rebote del parry).
+	func go(dest: Vector2, secs: float, height: float = 0.0) -> void:
+		from = global_position
+		to = dest
+		time = secs
+		arc = height
+		t = 0.0
+		_done = false
+
+	func pop() -> void:
+		_dead = 0.001
+
+	func _process(delta: float) -> void:
+		var dt := minf(delta / maxf(0.05, Engine.time_scale), 1.0 / 20.0)
+		if _dead > 0.0:
+			_dead += dt
+			modulate.a = 1.0 - _dead / 0.15
+			if _dead > 0.15:
+				queue_free()
+			return
+		t += dt
+		_rot += spin * dt
+		var e := clampf(t / maxf(time, 0.01), 0.0, 1.0)
+		global_position = from.lerp(to, e) + Vector2(0, -sin(e * PI) * arc)
+		if e >= 1.0 and not _done:
+			_done = true
+			arrived.emit()
+		queue_redraw()
+
+	func _draw() -> void:
+		draw_set_transform(Vector2.ZERO, _rot, Vector2(k, k))
+		draw_circle(Vector2.ZERO, 46.0, Color(col, 0.12))
+		if shape == "gold":
+			# lingote de oro gigante (trapecio con brillo)
+			var top := PackedVector2Array([Vector2(-58, -16), Vector2(58, -16), Vector2(78, 22), Vector2(-78, 22)])
+			draw_colored_polygon(top, Color(0.95, 0.72, 0.15))
+			draw_colored_polygon(PackedVector2Array([Vector2(-58, -16), Vector2(58, -16), Vector2(46, -30), Vector2(-46, -30)]), Color(1.0, 0.9, 0.45))
+			draw_line(Vector2(-40, -24), Vector2(10, -24), Color(1, 1, 0.85), 3.0)
+			var outline := PackedVector2Array([Vector2(-46, -30), Vector2(46, -30), Vector2(58, -16), Vector2(78, 22), Vector2(-78, 22), Vector2(-58, -16), Vector2(-46, -30)])
+			draw_polyline(outline, Color(0.35, 0.2, 0.02), 3.0)
+			draw_line(Vector2(-58, -16), Vector2(58, -16), Color(0.55, 0.35, 0.05), 2.0)
+		elif tex:
+			var sz := tex.get_size()
+			draw_texture(tex, -sz * 0.5)
+		else:
+			draw_circle(Vector2.ZERO, 18.0, col)
+		draw_set_transform(Vector2.ZERO)
+
+
+static func fly(parent: Node, from: Vector2, to: Vector2, time: float, shape: String = "", tex: Texture2D = null, k: float = 1.0, spin: float = 0.0, arc: float = 0.0) -> Fly:
+	var f := Fly.new()
+	f.from = from
+	f.to = to
+	f.time = time
+	f.shape = shape
+	f.tex = tex
+	f.k = k
+	f.spin = spin
+	f.arc = arc
+	parent.add_child(f)
+	return f
+
+
 ## Efecto de grokbot si existe; si no, null (el que llama dibuja su versión por código).
 static func anim(parent: Node, kind: String, prefix: String, at: Vector2, k: float = 1.0, ground: bool = false, fps: float = 14.0) -> Anim:
 	if parent == null or not parent.is_inside_tree() or not Anim.ok(kind, prefix):
@@ -738,7 +1011,8 @@ class Qte extends CanvasLayer:
 		_tt += dt
 		_flash = maxf(0.0, _flash - dt * 4.0)
 		if result != 0:
-			if _tt - _end_t > 0.35:
+			_c.modulate.a = clampf(1.0 - (_tt - _end_t - 0.12) / 0.2, 0.0, 1.0)
+			if _tt - _end_t > 0.33:
 				queue_free()
 			_c.queue_redraw()
 			return
@@ -822,7 +1096,7 @@ class Qte extends CanvasLayer:
 
 	func _paint() -> void:
 		var f := ThemeDB.fallback_font
-		var c := Vector2(640, 470)
+		var c := Vector2(1000, 520)   # a la derecha: que no tape al personaje ni al boss
 		var rc := col
 		if result == 1:
 			rc = Color(0.5, 1.0, 0.6)
@@ -830,11 +1104,14 @@ class Qte extends CanvasLayer:
 			rc = Color(1, 0.35, 0.3)
 		var pop := 1.0 + (0.25 * clampf(1.0 - (_tt - _end_t) / 0.3, 0.0, 1.0) if result != 0 else 0.0)
 		_c.draw_set_transform(c, 0.0, Vector2(pop, pop))
-		_c.draw_string_outline(f, Vector2(-400, -100), title, HORIZONTAL_ALIGNMENT_CENTER, 800, 42, 11, Color(0, 0, 0, 0.9))
-		_c.draw_string(f, Vector2(-400, -100), title, HORIZONTAL_ALIGNMENT_CENTER, 800, 42, rc)
+		var ts := 38
+		while ts > 22 and f.get_string_size(title, HORIZONTAL_ALIGNMENT_LEFT, -1, ts).x > 520.0:
+			ts -= 2
+		_c.draw_string_outline(f, Vector2(-270, -100), title, HORIZONTAL_ALIGNMENT_CENTER, 540, ts, 10, Color(0, 0, 0, 0.9))
+		_c.draw_string(f, Vector2(-270, -100), title, HORIZONTAL_ALIGNMENT_CENTER, 540, ts, rc)
 		if sub != "":
-			_c.draw_string_outline(f, Vector2(-400, -66), sub, HORIZONTAL_ALIGNMENT_CENTER, 800, 18, 6, Color(0, 0, 0, 0.9))
-			_c.draw_string(f, Vector2(-400, -66), sub, HORIZONTAL_ALIGNMENT_CENTER, 800, 18, Color(1, 1, 1, 0.9))
+			_c.draw_string_outline(f, Vector2(-270, -68), sub, HORIZONTAL_ALIGNMENT_CENTER, 540, 16, 6, Color(0, 0, 0, 0.9))
+			_c.draw_string(f, Vector2(-270, -68), sub, HORIZONTAL_ALIGNMENT_CENTER, 540, 16, Color(1, 1, 1, 0.9))
 		match mode:
 			"timing":
 				var k := clampf((_tt if result == 0 else _end_t) / dur, 0.0, 1.0)
@@ -845,7 +1122,7 @@ class Qte extends CanvasLayer:
 				_c.draw_arc(Vector2.ZERO, r_now, 0, TAU, 48, rc, 5.0)
 				_button(Vector2.ZERO, _key(action), rc)
 			"mash":
-				var bw := 440.0
+				var bw := 400.0
 				_c.draw_rect(Rect2(-bw * 0.5, 52, bw, 22), Color(0, 0, 0, 0.75))
 				_c.draw_rect(Rect2(-bw * 0.5, 52, bw * meter, 22), col.lightened(0.2))
 				_c.draw_rect(Rect2(-bw * 0.5, 52, bw, 22), Color(1, 1, 1, 0.8), false, 2.0)
@@ -862,12 +1139,12 @@ class Qte extends CanvasLayer:
 				_c.draw_string(f, Vector2(-200, 70), "%.1f s" % left2, HORIZONTAL_ALIGNMENT_CENTER, 400, 16, Color(1, 1, 1, 0.8))
 			"rhythm":
 				# los pulsos se acercan por una línea hacia el botón
-				_c.draw_line(Vector2(-420, 0), Vector2(0, 0), Color(1, 1, 1, 0.3), 3.0)
+				_c.draw_line(Vector2(-380, 0), Vector2(0, 0), Color(1, 1, 1, 0.3), 3.0)
 				for i in range(_i, beats.size()):
 					var dtb: float = float(beats[i]) - _tt
 					if dtb < -window or dtb > 2.0:
 						continue
-					var x2 := -dtb * 210.0
+					var x2 := -dtb * 190.0
 					_c.draw_circle(Vector2(x2, 0), 14.0, Color(col, 0.9))
 					_c.draw_arc(Vector2(x2, 0), 14.0, 0, TAU, 20, Color.WHITE, 2.0)
 				_button(Vector2.ZERO, _key(action), rc, 1.0 + 0.2 * _flash)

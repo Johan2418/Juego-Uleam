@@ -2026,39 +2026,97 @@ func _climax_clear() -> void:
 		h.queue_free()
 
 
+## Punto delante del boss (del lado de los jugadores) donde se paran a golpearlo en el clímax.
+func _front(radius: float) -> Vector2:
+	var at := global_position + Vector2(0, 160)
+	var vs := _victims()
+	if not vs.is_empty():
+		at = Vector2.ZERO
+		for v in vs:
+			at += (v as Node2D).global_position
+		at /= vs.size()
+	# de frente (abajo del boss), apenas corrido hacia el lado de donde vienen
+	var dx := clampf(at.x - global_position.x, -radius * 0.45, radius * 0.45)
+	return Epic.melee_spot(self, global_position + Vector2(dx, radius * 2.0), radius, arena_rect)
+
+
+## Centro de los jugadores (para apuntar lo que se les lanza en el clímax).
+func _team_body() -> Vector2:
+	var vs := _victims()
+	if vs.is_empty():
+		return global_position + Vector2(0, 160)
+	var at := Vector2.ZERO
+	for v in vs:
+		at += (v as Node2D).global_position
+	return at / vs.size() + Vector2(0, -34)
+
+
 func _gpos(part: Node2D) -> Vector2:
 	return part.global_position if part and is_instance_valid(part) else global_position + CENTER
 
 
-## CRASH DEL MERCADO: vende sin parar hasta hundir la acción y haz parry al lingote de oro final.
+## CRASH DEL MERCADO: el personaje corre hasta la bóveda y cada golpe VENDE (la acción se hunde);
+## al final el boss saca un LINGOTE DE ORO gigante y te lo lanza: parry para devolvérselo.
 func _climax() -> bool:
 	_climax_clear()
 	var p := get_parent()
 	var gold := Color(1.0, 0.8, 0.25)
+	var bar: Array = [null]
 	var steps := [
-		{"mode": "mash", "action": "action_primary", "title": "¡VENDE! ¡VENDE! ¡VENDE!", "sub": "Hunde la acción a cero",
-			"limit": 3.4, "gain": 0.075, "col": Color(1, 0.35, 0.3),
+		{"mode": "mash", "action": "action_primary", "title": "¡VENDE! ¡VENDE! ¡VENDE!", "sub": "Golpea la bóveda hasta hundir la acción a cero",
+			"limit": 3.6, "gain": 0.075, "col": Color(1, 0.35, 0.3),
+			"go": func() -> Vector2: return _front(108.0),
+			"look": func() -> Vector2: return _gpos(vault),
+			"act": "attack",
 			"before": func() -> void:
 				Epic.flash(p, Color(1, 0.2, 0.2), 0.2, 0.4)
 				await get_tree().create_timer(0.3).timeout,
 			"pressed": func() -> void:
 				var at := _gpos(ticker)
-				Epic.word(p, at + Vector2(randf_range(-90, 90), randf_range(-60, 0)), "-SELL", Color(1, 0.3, 0.25), 22, 0.5)
-				Epic.burst(p, _gpos(vault), gold, 6, 260.0, 0.8, 0.5)
+				if randf() < 0.5:
+					Epic.word(p, at + Vector2(randf_range(-160, 160), randf_range(-70, 10)), "-SELL", Color(1, 0.3, 0.25), 20, 0.45)
+				Epic.burst(p, _gpos(vault), gold, 8, 280.0, 0.8, 0.5)
 				_shake(2.0, 0.06),
 			"ok": func() -> void:
 				Epic.word(p, _gpos(ticker) + Vector2(0, -60), "¡CRASH!", Color(1, 0.3, 0.25), 50)
-				Epic.flash(p, Color(1, 0.2, 0.2), 0.35, 0.4)},
-		{"mode": "timing", "action": "parry", "title": "¡PARRY AL LINGOTE DE ORO!", "sub": "Su última inversión", "dur": 1.1, "col": gold,
+				Epic.flash(p, Color(1, 0.2, 0.2), 0.35, 0.4)
+				await get_tree().create_timer(0.3).timeout},
+		{"mode": "timing", "action": "parry", "title": "¡PARRY AL LINGOTE DE ORO!", "sub": "Su última inversión viene hacia ti", "dur": 1.1, "col": gold,
+			"look": func() -> Vector2: return _gpos(vault) + Vector2(0, -80),
+			"act": "parry",
 			"before": func() -> void:
-				Epic.charge(p, _gpos(vault), gold, 0.5, 140.0, vault),
+				# saca el lingote de la bóveda y lo levanta sobre la cabeza (anticipación)
+				var top := _gpos(head) + Vector2(0, -90)
+				var b := Epic.fly(p, _gpos(vault), top, 0.45, "gold", null, 1.0, 0.0, 30.0)
+				bar[0] = b
+				Epic.charge(p, top, gold, 0.5, 150.0)
+				Epic.word(p, top + Vector2(0, -60), "¡TODO AL ORO!", gold, 30, 0.8)
+				await get_tree().create_timer(0.55).timeout
+				# ¡lo lanza! llega justo en la ventana del QTE (tiempo real)
+				b.spin = 7.0
+				b.go(_team_body(), 0.82, 60.0),
 			"ok": func() -> void:
+				var b: Epic.Fly = bar[0]
+				GameFeel.parry_burst(p, b.global_position, 40.0)
+				Epic.word(p, b.global_position + Vector2(0, -50), "¡DEVUELTO!", Color(0.6, 1.0, 0.6), 34)
+				b.spin = -12.0
+				b.go(_gpos(vault), 0.3, 20.0)
+				await b.arrived
+				b.pop()
 				Epic.anim(p, "div0", "fxcrash", _gpos(vault), 1.4)
 				GameFeel.parry_burst(p, _gpos(vault), 56.0)
-				Epic.shards(p, _gpos(vault), gold, 16, 460.0, 8.0)
+				Epic.shards(p, _gpos(vault), gold, 18, 460.0, 9.0)
 				Epic.word(p, _gpos(vault) + Vector2(0, -70), "¡QUIEBRA!", gold, 48)
+				_shake(8.0, 0.3)
 				await get_tree().create_timer(0.3).timeout,
 			"fail": func() -> void:
+				var b: Epic.Fly = bar[0]
+				if b and is_instance_valid(b):
+					Epic.shards(p, b.global_position, gold, 10, 300.0, 8.0)
+					b.pop()
 				_climax_hurt(2, _gpos(vault))},
 	]
-	return await Epic.climax(self, steps)
+	var won := await Epic.climax(self, steps)
+	if bar[0] and is_instance_valid(bar[0]):
+		(bar[0] as Node).queue_free()
+	return won

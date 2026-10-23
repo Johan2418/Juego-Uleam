@@ -1246,7 +1246,8 @@ func _finisher() -> void:
 		tower.bias = 0.0
 		tower.sway_amp = 0.0
 		var to := global_position - tower.global_position
-		tower.fall(Vector2.RIGHT if to.length() < 1.0 else to.normalized(), 0.55)
+		if tower.state != "fall":   # en el clímax ya se la tumbaron encima
+			tower.fall(Vector2.RIGHT if to.length() < 1.0 else to.normalized(), 0.55)
 	head.mood = 2
 	_say("!!!", Color(1, 0.9, 0.4), 0.6)
 	await get_tree().create_timer(0.55).timeout
@@ -1811,30 +1812,75 @@ func _climax_clear() -> void:
 		h.queue_free()
 
 
+## Punto delante del boss (del lado de los jugadores) donde se paran a golpearlo en el clímax.
+func _front(radius: float) -> Vector2:
+	var at := global_position + Vector2(0, 160)
+	var vs := _victims()
+	if not vs.is_empty():
+		at = Vector2.ZERO
+		for v in vs:
+			at += (v as Node2D).global_position
+		at /= vs.size()
+	# de frente (abajo del boss), apenas corrido hacia el lado de donde vienen
+	var dx := clampf(at.x - global_position.x, -radius * 0.45, radius * 0.45)
+	return Epic.melee_spot(self, global_position + Vector2(dx, radius * 2.0), radius, arena_rect)
+
+
+## Centro de los jugadores (para apuntar lo que se les lanza en el clímax).
+func _team_body() -> Vector2:
+	var vs := _victims()
+	if vs.is_empty():
+		return global_position + Vector2(0, 160)
+	var at := Vector2.ZERO
+	for v in vs:
+		at += (v as Node2D).global_position
+	return at / vs.size() + Vector2(0, -34)
+
+
 func _gpos(part: Node2D) -> Vector2:
 	return part.global_position if part and is_instance_valid(part) else global_position + CENTER
 
 
-## DERRUMBE TOTAL: empuja la torre sobre él y rueda para que no te caiga encima.
+## DERRUMBE TOTAL: el personaje corre DETRÁS de la torre y la empuja a golpes hacia el boss; cuando cae,
+## rueda para que no le caigan los escombros.
 func _climax() -> bool:
 	_climax_clear()
 	var p := get_parent()
 	var orange := Color(1.0, 0.6, 0.15)
+	_ensure_tower()
+	var side := signf(global_position.x - tower.global_position.x)
+	if side == 0.0:
+		side = 1.0
 	var steps := [
-		{"mode": "mash", "action": "action_primary", "title": "¡EMPUJA LA TORRE!", "sub": "Que se le venga encima",
-			"limit": 3.4, "gain": 0.075, "col": orange,
+		{"mode": "mash", "action": "action_primary", "title": "¡EMPUJA LA TORRE!", "sub": "Desde atrás, que se le venga encima",
+			"limit": 3.6, "gain": 0.075, "col": orange,
+			"go": func() -> Vector2:
+				var at := tower.global_position + Vector2(-side * 72.0, 14.0)
+				return Vector2(clampf(at.x, arena_rect.position.x + 60.0, arena_rect.end.x - 60.0), at.y),
+			"look": func() -> Vector2: return tower.global_position + Vector2(0, -20),
+			"act": "attack",
 			"before": func() -> void:
+				while tower.floors < 6:
+					tower.add_piece(randi() % 3)
+				tower.sway_amp = 0.0
+				tower.bias = 0.0
+				_say("¡NO!", Color(1, 0.4, 0.3), 0.6)
 				await get_tree().create_timer(0.3).timeout,
 			"pressed": func() -> void:
-				GameFeel.dust(p, global_position + Vector2(randf_range(-120, 120), 10), 3, Vector2.ZERO, 4.0, Vector2(20, 6))
-				Epic.burst(p, _gpos(head), orange, 5, 220.0, 0.8, 0.4)
+				tower.bias = clampf(tower.bias + side * 0.018, -0.3, 0.3)
+				GameFeel.dust(p, tower.global_position + Vector2(randf_range(-30, 30), 0), 3, Vector2(side * 40, -20), 4.0, Vector2(20, 6))
+				Epic.burst(p, tower.global_position + Vector2(-side * 20, -20), orange, 5, 220.0, 0.6, 0.4)
 				_shake(2.5, 0.08),
 			"ok": func() -> void:
-				Epic.word(p, _gpos(head) + Vector2(0, -80), "¡SE CAE!", orange, 46)},
+				Epic.word(p, tower.global_position + Vector2(0, -160), "¡SE CAE!", orange, 46)
+				tower.bias = 0.0
+				tower.fall(Vector2(side, 0.0), 0.7)
+				await get_tree().create_timer(0.15).timeout},
 		{"mode": "timing", "action": "roll", "title": "¡RUEDA!", "sub": "¡Se viene todo abajo!", "dur": 1.0, "col": orange,
+			"act": "roll", "roll_dir": Vector2(-side, 0.35).normalized(),
 			"before": func() -> void:
 				for i in 6:
-					Epic.shards(p, global_position + Vector2(randf_range(-260, 260), randf_range(-60, 140)), Color(0.7, 0.68, 0.6), 4, 160.0, 10.0),
+					Epic.shards(p, tower.global_position + Vector2(side * randf_range(0, 260), randf_range(-60, 120)), Color(0.7, 0.68, 0.6), 4, 160.0, 10.0),
 			"ok": func() -> void:
 				Epic.anim(p, "stack", "fxweld", _gpos(head), 1.4)
 				Epic.shards(p, _gpos(head), Color(0.75, 0.7, 0.6), 20, 520.0, 12.0)
@@ -1843,6 +1889,11 @@ func _climax() -> bool:
 				_shake(10.0, 0.4)
 				await get_tree().create_timer(0.3).timeout,
 			"fail": func() -> void:
-				_climax_hurt(2, global_position)},
+				_climax_hurt(2, tower.global_position)},
 	]
-	return await Epic.climax(self, steps)
+	var won := await Epic.climax(self, steps)
+	if not won and tower and is_instance_valid(tower):
+		tower.reset()
+		for k in 3:
+			tower.add_piece(randi() % 3)
+	return won

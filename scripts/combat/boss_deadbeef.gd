@@ -1930,45 +1930,159 @@ func _climax_clear() -> void:
 		h.queue_free()
 
 
+## Punto delante del boss (del lado de los jugadores) donde se paran a golpearlo en el clímax.
+func _front(radius: float) -> Vector2:
+	var at := global_position + Vector2(0, 160)
+	var vs := _victims()
+	if not vs.is_empty():
+		at = Vector2.ZERO
+		for v in vs:
+			at += (v as Node2D).global_position
+		at /= vs.size()
+	# de frente (abajo del boss), apenas corrido hacia el lado de donde vienen
+	var dx := clampf(at.x - global_position.x, -radius * 0.45, radius * 0.45)
+	return Epic.melee_spot(self, global_position + Vector2(dx, radius * 2.0), radius, arena_rect)
+
+
+## Centro de los jugadores (para apuntar lo que se les lanza en el clímax).
+func _team_body() -> Vector2:
+	var vs := _victims()
+	if vs.is_empty():
+		return global_position + Vector2(0, 160)
+	var at := Vector2.ZERO
+	for v in vs:
+		at += (v as Node2D).global_position
+	return at / vs.size() + Vector2(0, -34)
+
+
 func _gpos(part: Node2D) -> Vector2:
 	return part.global_position if part and is_instance_valid(part) else global_position + CENTER
 
 
-## VOLCADO DE MEMORIA: el último brazo quedó clavado en el cráneo. Machaca para hundirlo y
-## haz parry a la mordida final del cráneo.
+## VOLCADO DE MEMORIA: el último brazo quedó clavado en el cráneo. El personaje corre hasta el boss y
+## cada golpe EMPUJA el brazo más adentro; luego el cráneo se lanza a morderlo: parry.
 func _climax() -> bool:
 	_climax_clear()
 	var p := get_parent()
+	var stuck := StuckArm.new()
+	var skull_home: Vector2 = _home[skull]
+	var lunge: Array = [null]
 	var steps := [
-		{"mode": "mash", "action": "action_primary", "title": "¡CLÁVALO HASTA EL FONDO!", "sub": "Machaca para hundir el brazo en el cráneo",
-			"limit": 3.4, "gain": 0.075, "col": _accent(),
+		{"mode": "mash", "action": "action_primary", "title": "¡CLÁVALO HASTA EL FONDO!", "sub": "Cada golpe empuja el brazo dentro del cráneo",
+			"limit": 3.6, "gain": 0.075, "col": _accent(),
+			"go": func() -> Vector2: return _clamp_arena(global_position + Vector2(0, 92)),
+			"look": func() -> Vector2: return stuck.butt() if is_instance_valid(stuck) and stuck.is_inside_tree() else _gpos(skull),
+			"act": "attack",
 			"before": func() -> void:
 				_face("SIGSEGV", Color(1, 0.3, 0.2), Color(0.15, 0, 0))
-				Epic.charge(p, _gpos(skull), Color(1, 0.3, 0.2), 0.5, 140.0)
+				stuck.tip = _gpos(skull) + Vector2(0, 18)
+				p.add_child(stuck)
+				Epic.charge(p, stuck.butt(), Color(1, 0.3, 0.2), 0.5, 120.0)
 				await get_tree().create_timer(0.35).timeout,
 			"pressed": func() -> void:
+				stuck.push()
 				var at := _gpos(skull)
-				Epic.burst(p, at, Color(1, 0.4, 0.25), 8, 260.0, 0.5, 0.4)
-				Epic.word(p, at + Vector2(randf_range(-70, 70), -40), "0x%X" % randi_range(0x1000, 0xFFFF), Color(0.4, 1.0, 0.4), 20, 0.5)
+				Epic.burst(p, at + Vector2(randf_range(-20, 20), 10), Color(1, 0.4, 0.25), 8, 260.0, 0.5, 0.4)
+				Epic.burst(p, stuck.butt(), Color(1, 0.9, 0.6), 5, 200.0, 0.4, 0.3)
+				Epic.word(p, at + Vector2(randf_range(-80, 80), -40), "0x%X" % randi_range(0x1000, 0xFFFF), Color(0.4, 1.0, 0.4), 20, 0.5)
+				_kick = Vector2(randf_range(-3, 3), -5)
 				_shake(2.5, 0.08),
 			"ok": func() -> void:
+				stuck.slam()
 				var at := _gpos(skull)
 				Epic.shards(p, at, Color(0.85, 0.8, 0.7), 14, 420.0, 8.0)
 				Epic.flash(p, Color(1, 0.3, 0.2), 0.3, 0.35)
-				Epic.word(p, at + Vector2(0, -70), "¡CRACK!", Color(1, 0.9, 0.3), 46)},
+				Epic.word(p, at + Vector2(0, -70), "¡CRACK!", Color(1, 0.9, 0.3), 46)
+				_shake(6.0, 0.25)
+				await get_tree().create_timer(0.35).timeout},
 		{"mode": "timing", "action": "parry", "title": "¡PARRY!", "sub": "El cráneo se lanza a morderte", "dur": 1.1, "col": Color(1, 0.4, 0.3),
+			"look": func() -> Vector2: return _gpos(skull),
+			"act": "parry",
 			"before": func() -> void:
-				_tw(skull, "position", skull.position + Vector2(0, 70), 0.5)
-				Epic.charge(p, _gpos(skull), Color(1, 0.2, 0.15), 0.45, 100.0, skull),
+				# se echa atrás (anticipación) y se lanza: llega justo en la ventana del QTE (tiempo real)
+				stuck.visible = false
+				_face("BITE", Color(1, 0.2, 0.15), Color(0.2, 0, 0))
+				var up := create_tween()
+				up.tween_property(skull, "position", skull_home + Vector2(0, -34), 0.3).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+				Epic.charge(p, _gpos(skull), Color(1, 0.2, 0.15), 0.35, 100.0, skull)
+				await up.finished
+				var dest: Vector2 = (skull.get_parent() as Node2D).to_local(_team_body())
+				var tw := create_tween()
+				tw.set_ignore_time_scale(true)
+				tw.tween_property(skull, "position", skull.position.lerp(dest, 0.82), 0.82).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+				lunge[0] = tw,
 			"ok": func() -> void:
+				if lunge[0]:
+					(lunge[0] as Tween).kill()
 				Epic.anim(p, "deadbeef", "fxcore", _gpos(skull), 1.4)
 				GameFeel.parry_burst(p, _gpos(skull), 60.0)
 				Epic.ring(p, _gpos(skull), Color.WHITE, 260.0, 0.45, 10.0)
 				Epic.word(p, _gpos(skull) + Vector2(0, -60), "¡BLOQUEADO!", Color(0.6, 1.0, 0.6), 36)
-				_tw(skull, "position", _home[skull], 0.3)
-				await get_tree().create_timer(0.3).timeout,
+				var back := create_tween()
+				back.tween_property(skull, "position", skull_home, 0.35).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+				_shake(5.0, 0.2)
+				await back.finished
+				stuck.visible = true,
 			"fail": func() -> void:
+				if lunge[0]:
+					(lunge[0] as Tween).kill()
 				_climax_hurt(2, _gpos(skull))
-				_tw(skull, "position", _home[skull], 0.3)},
+				create_tween().tween_property(skull, "position", skull_home, 0.35)},
 	]
-	return await Epic.climax(self, steps)
+	var won := await Epic.climax(self, steps)
+	if not won:
+		skull.position = skull_home
+		if is_instance_valid(stuck):
+			stuck.queue_free()
+	elif is_instance_valid(stuck):
+		var fade := stuck.create_tween()
+		fade.tween_interval(2.2)
+		fade.tween_property(stuck, "modulate:a", 0.0, 0.4)
+		fade.tween_callback(stuck.queue_free)
+	return won
+
+
+## Brazo clavado en el cráneo (clímax): la garra adentro, el hombro hacia el jugador. Cada golpe lo hunde.
+class StuckArm extends Node2D:
+	var tip := Vector2.ZERO
+	var depth := 0.0
+	var _kick := 0.0
+	var t := 0.0
+
+	func _ready() -> void:
+		z_index = 40
+		z_as_relative = false
+		global_position = tip
+
+	func butt() -> Vector2:
+		return tip + Vector2(0, 150.0 - depth)
+
+	func push() -> void:
+		depth = minf(depth + 5.0, 44.0)
+		_kick = 1.0
+
+	func slam() -> void:
+		var tw := create_tween()
+		tw.tween_property(self, "depth", 70.0, 0.12).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+		_kick = 1.0
+
+	func _process(delta: float) -> void:
+		t += delta
+		_kick = maxf(0.0, _kick - delta * 6.0)
+		queue_redraw()
+
+	func _draw() -> void:
+		var tx := Spr.tex("boss_0xdeadbeef_claw_1")
+		var off := Vector2(0, -depth - 8.0 * _kick)
+		# grietas y chispas en el punto donde entra
+		for i in 5:
+			var a := -PI * 0.5 + (i - 2) * 0.5
+			draw_line(Vector2.ZERO, Vector2.from_angle(a) * (14.0 + depth * 0.5), Color(1, 0.5, 0.3, 0.8), 2.0)
+		if tx:
+			var sz := tx.get_size()
+			draw_set_transform(off + Vector2(0, 150), PI, Vector2(1.0, 0.92))
+			draw_texture(tx, Vector2(-sz.x * 0.5, 0))
+			draw_set_transform(Vector2.ZERO)
+		else:
+			draw_rect(Rect2(off + Vector2(-8, 0), Vector2(16, 150)), Color(0.5, 0.55, 0.6))
+		draw_circle(Vector2.ZERO, 6.0 + 4.0 * _kick, Color(1, 0.8, 0.4, 0.9))

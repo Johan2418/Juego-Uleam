@@ -66,6 +66,10 @@ class Shot extends BossFx.Hazard:
 	var on_result := "final_result"
 	var on_back := "final_back"
 	var size := 16.0
+	## Distancia al cuerpo del jugador a la que choca (proyectiles grandes: que coincida con lo que se ve).
+	var hit_r := 26.0
+	## > 0: el parry lo cubre en un ángulo más amplio que el normal del personaje (grados a cada lado).
+	var cover_deg := 0.0
 	var t := 0.0
 	var back := false
 	var _done := false
@@ -133,7 +137,7 @@ class Shot extends BossFx.Hazard:
 	func _touching() -> bool:
 		for v in victims():
 			_victim = v
-			if player_body().distance_to(global_position) < 26.0:
+			if player_body().distance_to(global_position) < hit_r:
 				return true
 		_victim = null
 		return false
@@ -143,7 +147,12 @@ class Shot extends BossFx.Hazard:
 		var cc: Variant = _who().get("class_controller")
 		if cc == null or not is_instance_valid(cc):
 			return 0
-		if not (bool(cc.get("parrying")) and bool(cc.call("parry_covers", global_position))):
+		var covers := bool(cc.call("parry_covers", global_position))
+		if not covers and cover_deg > 0.0:
+			var to := global_position - _who().global_position
+			var fv: Vector2 = cc.get("facing")
+			covers = to.length() < 0.01 or to.normalized().dot(fv) >= cos(deg_to_rad(cover_deg))
+		if not (bool(cc.get("parrying")) and covers):
 			return 0
 		if strict > 0.0 and float(cc.call("parry_age")) > strict:
 			return -1

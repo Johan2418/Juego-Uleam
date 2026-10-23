@@ -1069,6 +1069,9 @@ func _final_round(tok: int) -> bool:
 	shot.damage = 2
 	shot.target = Vector2(0, -90)
 	shot.size = 30.0
+	# el fantasma es grande: choca donde se ve (antes había que dejarlo llegar al centro y el parry se pasaba)
+	shot.hit_r = 58.0
+	shot.cover_deg = 110.0
 	_add_fx(shot, from)
 	shot.aim_at(_player_body(), lerpf(380.0, 620.0, float(_final_hits) / FINAL_ROUNDS) * slow)
 	if slow < 1.0:
@@ -1944,29 +1947,64 @@ func _climax_clear() -> void:
 		h.queue_free()
 
 
+## Punto delante del boss (del lado de los jugadores) donde se paran a golpearlo en el clímax.
+func _front(radius: float) -> Vector2:
+	var at := global_position + Vector2(0, 160)
+	var vs := _victims()
+	if not vs.is_empty():
+		at = Vector2.ZERO
+		for v in vs:
+			at += (v as Node2D).global_position
+		at /= vs.size()
+	# de frente (abajo del boss), apenas corrido hacia el lado de donde vienen
+	var dx := clampf(at.x - global_position.x, -radius * 0.45, radius * 0.45)
+	return Epic.melee_spot(self, global_position + Vector2(dx, radius * 2.0), radius, arena_rect)
+
+
+## Centro de los jugadores (para apuntar lo que se les lanza en el clímax).
+func _team_body() -> Vector2:
+	var vs := _victims()
+	if vs.is_empty():
+		return global_position + Vector2(0, 160)
+	var at := Vector2.ZERO
+	for v in vs:
+		at += (v as Node2D).global_position
+	return at / vs.size() + Vector2(0, -34)
+
+
 func _gpos(part: Node2D) -> Vector2:
 	return part.global_position if part and is_instance_valid(part) else global_position + CENTER
 
 
-## MIRADA FINAL: la estatua se lanza desde la oscuridad; mírala justo a tiempo (fijar) y rómpela.
+## MIRADA FINAL: la estatua se lanza desde la oscuridad; el personaje la mira (fijar justo a tiempo) y
+## luego corre hasta ella y la rompe a golpes.
 func _climax() -> bool:
 	_climax_clear()
 	var p := get_parent()
 	var marble := Color(0.92, 0.9, 0.95)
 	var steps := [
 		{"mode": "timing", "action": "lock_on", "title": "¡MÍRALO A LOS OJOS!", "sub": "Fija la mirada justo cuando se lanza", "dur": 1.1, "col": Color(1, 0.3, 1.0),
+			"look": func() -> Vector2: return _gpos(core),
 			"before": func() -> void:
+				visible = true
 				Epic.charge(p, _gpos(head), Color(1, 0.3, 1.0), 0.5, 140.0, head)
 				await get_tree().create_timer(0.25).timeout,
 			"ok": func() -> void:
+				stone_k = 1.0
 				Epic.flash(p, marble, 0.4, 0.35)
 				Epic.word(p, _gpos(head) + Vector2(0, -70), "¡PETRIFICADO!", marble, 42)
 				GameFeel.flash(rig, 0.3, Color(0.8, 0.8, 0.85)),
 			"fail": func() -> void:
 				_climax_hurt(2, _gpos(head))},
 		{"mode": "mash", "action": "action_primary", "title": "¡ROMPE LA ESTATUA!", "sub": "Machaca antes de que se mueva otra vez",
-			"limit": 3.2, "gain": 0.08, "col": marble,
+			"limit": 3.6, "gain": 0.075, "col": marble,
+			"go": func() -> Vector2: return _front(95.0),
+			"look": func() -> Vector2: return _gpos(core),
+			"act": "attack",
+			"before": func() -> void:
+				stone_k = 1.0,
 			"pressed": func() -> void:
+				stone_k = 1.0
 				Epic.shards(p, _gpos(core) + Vector2(randf_range(-40, 40), randf_range(-40, 40)), marble if randf() < 0.6 else Color(1, 0.2, 1.0), 4, 260.0, 7.0)
 				_shake(2.0, 0.06),
 			"ok": func() -> void:

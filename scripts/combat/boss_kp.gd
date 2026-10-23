@@ -47,7 +47,11 @@ const DEFEND_DIST := 130.0
 ## pero no transmite (la barra de arriba dice cuáles están en vivo). Romperla = castigo.
 ## Duelo final ÚLTIMA TRANSMISIÓN: se enciende una cámara cada vez; rómpela antes de que se acabe su tiempo.
 const FINAL_CAMS := 8
-const FINAL_TIME := [3.0, 1.7]
+const FINAL_TIME := [3.2, 2.1]
+## Duelo final: velocidad con la que se calcula si se llega a una cámara (algo menos que caminar,
+## por los tropiezos con el fuego; corriendo sobra tiempo) y tiempo extra para pegarle.
+const FINAL_RUN_SPEED := 130.0
+const FINAL_HIT_MARGIN := 1.1
 
 # pies en y 0
 const SHOULDER_L := Vector2(-62, -170)
@@ -863,6 +867,14 @@ func _start_final() -> void:
 			cam.call("repair", 1)
 			cam.set("live", false)
 			cam.set("decoy", false)
+			# en el duelo se le puede pegar a toda la cámara (trípode incluido), no solo al lente
+			var ar: Area2D = cam.get("_area")
+			if ar and ar.get_child_count() > 0:
+				var cs := ar.get_child(0) as CollisionShape2D
+				var big := CircleShape2D.new()
+				big.radius = 40.0
+				cs.shape = big
+				cs.position = Vector2(0, -28)
 	live = null
 	live2 = null
 	head.screen = 0
@@ -887,10 +899,22 @@ func _start_final() -> void:
 			if not await _hold(0.1, tok):
 				return
 			continue
+		# la que se enciende no es la más lejana (con 3+ opciones): de punta a punta no llega nadie a pie
+		var near_pos := _team_body()
+		opts.sort_custom(func(a: Node2D, b: Node2D) -> bool: return a.global_position.distance_to(near_pos) < b.global_position.distance_to(near_pos))
+		if opts.size() >= 3:
+			opts.pop_back()
 		_final_target = opts[randi() % opts.size()]
 		prev = _final_target
 		_final_target.set("live", true)
-		_final_total = lerpf(FINAL_TIME[0], FINAL_TIME[1], float(_final_hits) / maxf(1.0, FINAL_CAMS - 1))
+		# tiempo: el del ritmo del duelo, pero nunca menos de lo que se tarda en llegar corriendo y pegarle
+		var dist := INF
+		for v in _victims():
+			dist = minf(dist, (v as Node2D).global_position.distance_to(_final_target.global_position))
+		if dist == INF:
+			dist = 400.0
+		var need := maxf(0.0, dist - 70.0) / FINAL_RUN_SPEED + FINAL_HIT_MARGIN
+		_final_total = maxf(lerpf(FINAL_TIME[0], FINAL_TIME[1], float(_final_hits) / maxf(1.0, FINAL_CAMS - 1)), need)
 		_final_left = _final_total
 		var timer := CamTimer.new()
 		timer.boss = self
@@ -903,7 +927,7 @@ func _start_final() -> void:
 			_final_left -= 0.05
 			fire_t -= 0.05
 			if fire_t <= 0.0:
-				fire_t = maxf(0.7, 1.4 - 0.08 * _final_hits)
+				fire_t = maxf(1.0, 1.6 - 0.07 * _final_hits)
 				_final_flambe(tok)
 			if _final_left <= 0.0:
 				_final_fail = true
@@ -953,7 +977,8 @@ func _final_flambe(tok: int) -> void:
 		if tok != _tok or not _player_ok():
 			return
 		var from := global_position + SHOULDER_L + Vector2(-20, -40)
-		var aim := _player_feet()
+		# cae cerca (no encima): corta el paso, pero se puede seguir corriendo a la cámara
+		var aim := _player_feet() + Vector2.from_angle(randf() * TAU) * randf_range(50.0, 110.0)
 		var base := (aim - from).normalized()
 		pan.rotation = _rot_for(base)
 		_pose(base * 10.0, 0.04, 0.06)
@@ -1174,8 +1199,10 @@ func _atk_charge(tok: int) -> void:
 	var speed := 620.0 if phase < 3 else 720.0
 	var hit := false
 	while t < reach / speed:
+		if not is_inside_tree():
+			return
 		await get_tree().physics_frame
-		if tok != _tok:
+		if tok != _tok or not is_inside_tree():
 			return
 		var d := get_physics_process_delta_time()
 		t += d
@@ -1970,18 +1997,48 @@ func _climax_clear() -> void:
 		h.queue_free()
 
 
+## Punto delante del boss (del lado de los jugadores) donde se paran a golpearlo en el clímax.
+func _front(radius: float) -> Vector2:
+	var at := global_position + Vector2(0, 160)
+	var vs := _victims()
+	if not vs.is_empty():
+		at = Vector2.ZERO
+		for v in vs:
+			at += (v as Node2D).global_position
+		at /= vs.size()
+	# de frente (abajo del boss), apenas corrido hacia el lado de donde vienen
+	var dx := clampf(at.x - global_position.x, -radius * 0.45, radius * 0.45)
+	return Epic.melee_spot(self, global_position + Vector2(dx, radius * 2.0), radius, arena_rect)
+
+
+## Centro de los jugadores (para apuntar lo que se les lanza en el clímax).
+func _team_body() -> Vector2:
+	var vs := _victims()
+	if vs.is_empty():
+		return global_position + Vector2(0, 160)
+	var at := Vector2.ZERO
+	for v in vs:
+		at += (v as Node2D).global_position
+	return at / vs.size() + Vector2(0, -34)
+
+
 func _gpos(part: Node2D) -> Vector2:
 	return part.global_position if part and is_instance_valid(part) else global_position + CENTER
 
 
-## FUERA DEL AIRE: apaga su flambé gigante y corta la transmisión rompiendo la última cámara.
+## FUERA DEL AIRE: el personaje corre hasta el chef y apaga su flambé a golpes; luego corre a la
+## última cámara y la rompe: ¡CORTE!
 func _climax() -> bool:
 	_climax_clear()
 	var p := get_parent()
 	var fire := Color(1.0, 0.55, 0.15)
+	var last: Array = [null]
 	var steps := [
 		{"mode": "mash", "action": "action_primary", "title": "¡APAGA EL FLAMBÉ!", "sub": "Machaca para sofocar el fuego",
-			"limit": 3.4, "gain": 0.075, "col": fire,
+			"limit": 3.6, "gain": 0.075, "col": fire,
+			"go": func() -> Vector2: return _front(105.0),
+			"look": func() -> Vector2: return _gpos(pan),
+			"act": "attack",
 			"before": func() -> void:
 				Epic.embers(p, _gpos(pan), fire, Rect2(-60, -30, 120, 40), 3.5, 60.0)
 				await get_tree().create_timer(0.3).timeout,
@@ -1990,16 +2047,47 @@ func _climax() -> bool:
 				Epic.burst(p, _gpos(pan), fire, 5, 200.0, 0.9, 0.4)
 				_shake(1.8, 0.06),
 			"ok": func() -> void:
-				Epic.word(p, _gpos(pan) + Vector2(0, -70), "¡APAGADO!", Color(0.8, 0.9, 1.0), 42)},
+				Epic.word(p, _gpos(pan) + Vector2(0, -70), "¡APAGADO!", Color(0.8, 0.9, 1.0), 42)
+				# la cámara que queda se enciende: hay que correr a romperla
+				last[0] = _climax_camera()
+				if last[0]:
+					(last[0] as Node).set("live", true)
+				await get_tree().create_timer(0.25).timeout},
 		{"mode": "timing", "action": "action_primary", "title": "¡CORTE!", "sub": "Rompe la última cámara", "dur": 1.0, "col": Color(1, 0.3, 0.3),
+			"go": func() -> Vector2:
+				var cam: Node2D = last[0]
+				if cam == null or not is_instance_valid(cam):
+					return _front(105.0)
+				var to_mid := (arena_rect.get_center() - cam.global_position).normalized()
+				return cam.global_position + to_mid * 62.0,
+			"look": func() -> Vector2:
+				var cam: Node2D = last[0]
+				return cam.global_position + Vector2(0, -40) if cam and is_instance_valid(cam) else _gpos(head),
+			"act": "attack",
 			"ok": func() -> void:
-				Epic.anim(p, "kp", "fxstatic", _gpos(head), 1.4)
+				var cam: Node2D = last[0]
+				var at := cam.global_position + Vector2(0, -50) if cam and is_instance_valid(cam) else _gpos(head)
+				if cam and is_instance_valid(cam) and cam.has_method("smash"):
+					cam.call("smash")
+				Epic.anim(p, "kp", "fxstatic", at, 1.4)
 				Epic.flash(p, Color(0.8, 0.8, 0.8), 0.5, 0.5)
-				Epic.shards(p, _gpos(head), Color(0.3, 0.3, 0.35), 16, 460.0, 8.0)
-				Epic.word(p, _gpos(head) + Vector2(0, -80), "¡SIN SEÑAL!", Color(1, 0.3, 0.3), 50)
+				Epic.shards(p, at, Color(0.3, 0.3, 0.35), 16, 460.0, 8.0)
+				Epic.word(p, at + Vector2(0, -80), "¡SIN SEÑAL!", Color(1, 0.3, 0.3), 50)
+				head.screen = 2
 				_shake(8.0, 0.3)
 				await get_tree().create_timer(0.3).timeout,
 			"fail": func() -> void:
 				_climax_hurt(2, _gpos(head))},
 	]
 	return await Epic.climax(self, steps)
+
+
+## Cámara más cercana a los jugadores que siga entera (para el ¡CORTE! del clímax).
+func _climax_camera() -> Node2D:
+	var best: Node2D = null
+	var from := _team_body()
+	for c in cams:
+		if is_instance_valid(c) and not bool(c.get("broken")) and not bool(c.get("handheld")):
+			if best == null or (c as Node2D).global_position.distance_to(from) < best.global_position.distance_to(from):
+				best = c
+	return best

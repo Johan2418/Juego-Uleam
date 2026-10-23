@@ -611,6 +611,9 @@ func _on_stunned() -> void:
 ## Premio de la mecánica de cada boss: al aturdirlo sale un QTE de GOLPE CRÍTICO (cámara lenta corta).
 ## Acertarlo le quita CRIT_DMG (x2 si tiene el punto débil abierto) con un golpe enorme.
 const CRIT_DMG := 3
+## Distancia a la que el golpe crítico deja al personaje del centro de cada boss (tamaño del boss).
+const CRIT_RADIUS := {"deadbeef": 125.0, "bsod": 105.0, "div0": 115.0, "syntax": 100.0, "stack": 135.0,
+	"judge": 115.0, "tex": 100.0, "kp": 110.0, "sudo": 62.0}
 var _crit_busy := false
 
 
@@ -629,14 +632,35 @@ func _crit_qte() -> void:
 	_crit_busy = false
 	if not ok or _over or not is_instance_valid(boss) or str(boss.get("state")) in ["dead", "final", "transition", "paused"]:
 		return
-	var who: Node2D = CoopBoss.nearest_to(get_tree(), _boss_core(), player, 0.0)
-	var from := who.global_position if who else _boss_core() + Vector2(0, 120)
-	boss.call("take_hit", CRIT_DMG, from)
+	# el personaje se lanza en un dash hasta el boss y le pega de cerca con su propio golpe
+	var actors := Epic.grab(get_tree())
+	if actors.is_empty():
+		return
+	var radius: float = CRIT_RADIUS.get(boss_kind, 105.0)
+	var dests: Array = []
+	for a in actors:
+		dests.append(Epic.melee_spot(boss, (a as Node2D).global_position, radius, ARENA))
+	if actors.size() == 2 and (dests[0] as Vector2).distance_to(dests[1]) < 70.0:
+		dests[0] = (dests[0] as Vector2) + Vector2(-45, 0)
+		dests[1] = (dests[1] as Vector2) + Vector2(45, 0)
+	Epic.speed_lines(self, 0.3, Color(1, 1, 1, 0.45))
+	await Epic.run_group(actors, dests, 1100.0, true)
+	if _over or not is_instance_valid(boss):
+		Epic.release(actors)
+		return
 	var c := _boss_core()
-	Epic.big_hit(self, c + Vector2(0, 60), _accent(), 8.0)
-	Epic.word(self, c + Vector2(0, -90), "¡CRÍTICO!", Color(1, 0.9, 0.3), 46)
-	Epic.speed_lines(self, 0.35, Color(1, 1, 1, 0.5))
-	GameFeel.hit_stop(get_tree(), 0.12)
+	for a in actors:
+		Epic.act(a, "attack", c - (a as Node2D).global_position)
+	await get_tree().create_timer(0.12).timeout
+	if not _over and is_instance_valid(boss) and str(boss.get("state")) not in ["dead", "final", "transition", "paused"]:
+		boss.call("take_hit", CRIT_DMG, (actors[0] as Node2D).global_position)
+		c = _boss_core()
+		Epic.big_hit(self, c + Vector2(0, 60), _accent(), 8.0)
+		Epic.word(self, c + Vector2(0, -90), "¡CRÍTICO!", Color(1, 0.9, 0.3), 46)
+		Epic.speed_lines(self, 0.35, Color(1, 1, 1, 0.5))
+		GameFeel.hit_stop(get_tree(), 0.12)
+	await get_tree().create_timer(0.3).timeout
+	Epic.release(actors)
 
 
 func _on_arm_broken(_arm: String) -> void:
