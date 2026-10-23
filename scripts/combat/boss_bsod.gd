@@ -93,6 +93,9 @@ var _beats_in_bpm: int = 0
 ## duelo final
 var final_victory: bool = false
 var _final_bpm: float = 0.0
+## Descargas devueltas que ya llegaron al corazón (la última dispara el remate en cámara lenta).
+var _final_back_n: int = 0
+const BLUE_FX := Color(0.4, 0.72, 1.0)
 var _final_hits: int = 0
 var _final_fail: bool = false
 var _paddles: Array = []
@@ -1058,6 +1061,7 @@ func _start_final() -> void:
 	tank_open = false
 	heart.open = false
 	_final_hits = 0
+	_final_back_n = 0
 	_final_fail = false
 	for h in get_tree().get_nodes_in_group("boss_hazard"):
 		h.queue_free()
@@ -1080,12 +1084,17 @@ func _start_final() -> void:
 		for pd in _paddles:
 			pd.charge = (k + 1) / 3.0
 			pd.zap()
+			Epic.ring(get_parent(), pd.global_position, BLUE_FX, 60.0 + 30.0 * k, 0.3, 5.0)
+			Epic.burst(get_parent(), pd.global_position, Color(0.75, 0.9, 1.0), 6 + 3 * k, 220.0, 0.4, 0.4)
+		Epic.charge(get_parent(), global_position + HEART, BLUE_FX, 0.4, 90.0 + 30.0 * k, self, HEART)
 		GameFeel.flash(rig, 0.1, Color(0.6, 0.85, 1.0))
 		_tw(scalpel, "rotation", REST_L + 0.4, 0.18)
 		_tw(tool, "rotation", REST_R - 0.4, 0.18)
 		if not await _wait(0.22, tok):
 			return
 	_say_big("¡CARGANDO!")
+	Epic.flash(get_parent(), BLUE_FX, 0.2, 0.3)
+	Epic.ring(get_parent(), global_position, BLUE_FX, 300.0, 0.5, 10.0)
 	# DESCARGAS al ritmo del corazón
 	var side := 0
 	while _final_hits < FINAL_PULSES and not _final_fail:
@@ -1108,6 +1117,12 @@ func _start_final() -> void:
 	if _final_fail:
 		_final_lost(tok)
 	else:
+		# la última descarga devuelta tiene que llegar al corazón (es el golpe del remate)
+		var w2 := 0.0
+		while _final_back_n < FINAL_PULSES and w2 < 2.5:
+			if not await _wait(0.05, tok):
+				return
+			w2 += 0.05
 		_final_won()
 
 
@@ -1131,6 +1146,8 @@ func _discharge(arm: Part, tok: int) -> void:
 	for pd in _paddles:
 		pd.zap()
 	GameFeel.parry_burst(get_parent(), from, 18.0)
+	Epic.burst(get_parent(), from, Color(0.7, 0.9, 1.0), 10, 260.0, 0.3, 0.4)
+	Epic.ring(get_parent(), from, BLUE_FX, 90.0, 0.3, 5.0)
 	_shake(2.0, 0.08)
 	# recoge el brazo para el siguiente (anticipación)
 	var back := create_tween()
@@ -1159,21 +1176,55 @@ func final_result(ok: bool, _shot: Node) -> void:
 
 ## La descarga devuelta le pega en el corazón.
 func final_back(shot: Node2D) -> void:
-	GameFeel.parry_burst(get_parent(), global_position + HEART, 26.0 + 2.0 * _final_hits)
+	_final_back_n += 1
+	var at := global_position + HEART
+	var k := float(_final_back_n) / FINAL_PULSES
+	GameFeel.parry_burst(get_parent(), at, 26.0 + 2.0 * _final_hits)
 	heart.pulse = 1.0
 	GameFeel.flash(rig, 0.08, Color(0.6, 0.85, 1.0))
 	head.anim_off += Vector2(0, -4)
 	shot.queue_free()
+	# cada choque devuelto pega más fuerte: onda, chispas, arcos y la cámara
+	Epic.ring(get_parent(), at, BLUE_FX, 110.0 + 160.0 * k, 0.4, 6.0 + 8.0 * k)
+	Epic.burst(get_parent(), at, Color(0.75, 0.9, 1.0), int(10 + 24 * k), 280.0 + 200.0 * k, 0.4, 0.5)
+	Epic.anim(get_parent(), "bsod", "fxshock", at, 0.6 + 0.6 * k)
+	Epic.word(get_parent(), at + Vector2(randf_range(-50, 50), -70), "%d/%d" % [_final_back_n, FINAL_PULSES], Color(0.7, 0.9, 1.0), int(20 + 18 * k), 0.6)
+	Epic.cam_punch(get_tree(), 0.02 + 0.05 * k, 0.2)
+	_shake(2.0 + 4.0 * k, 0.12)
+	if _final_back_n >= FINAL_PULSES * 2 / 3:
+		Epic.speed_lines(get_parent(), 0.3, Color(0.7, 0.9, 1.0, 0.45))
+
+
+## REMATE en cámara lenta: la última descarga devuelta le atraviesa el corazón.
+func _last_shock() -> void:
+	var p := get_parent()
+	var at := global_position + HEART
+	var bars := Epic.cinema(p)
+	Epic.cam_zoom(get_tree(), 1.22, 0.3)
+	Epic.cam_focus(get_tree(), at)
+	Engine.time_scale = 0.3
+	Epic.whiteout(p, Color(0.7, 0.88, 1.0, 0.9), 0.7, 0.08)
+	Epic.ring(p, at, BLUE_FX, 520.0, 0.8, 18.0)
+	Epic.ring(p, at, Color.WHITE, 320.0, 0.6, 8.0)
+	Epic.burst(p, at, Color(0.8, 0.95, 1.0), 60, 620.0, 0.4, 1.0)
+	Epic.shards(p, at, Color(0.85, 0.2, 0.25), 14, 420.0, 7.0)
+	Epic.anim(p, "bsod", "fxpulse", at, 1.5)
+	Epic.word(p, at + Vector2(0, -100), "¡CLEAR!", Color(0.75, 0.92, 1.0), 64, 1.4)
+	heart.pulse = 1.0
+	GameFeel.flash(rig, 0.5, Color(0.7, 0.9, 1.0))
+	_shake(10.0, 0.5)
+	await get_tree().create_timer(1.1, true, false, true).timeout
+	Engine.time_scale = 1.0
+	Epic.cam_reset(get_tree(), 0.5)
+	if bars:
+		bars.close()
 
 
 func _final_won() -> void:
-	# clímax con QTE antes del remate; si se falla, vuelve la fase 3 como al perder el duelo
-	if not await _climax():
-		_final_lost(_tok)
-		return
 	final_victory = true
 	_final_bpm = 0.0
 	Final.music_final(self, "epic")
+	await _last_shock()
 	await _finisher()
 	_shake(12.0, 0.8)
 	hp = 0
@@ -1297,7 +1348,14 @@ func _finisher() -> void:
 		if is_instance_valid(pd):
 			pd.zap()
 	for arm in [scalpel, tool]:
-		GameFeel.parry_burst(get_parent(), arm.global_position + Vector2(0, ARM_LEN * 0.8).rotated(arm.global_rotation), 44.0)
+		var tip: Vector2 = arm.global_position + Vector2(0, ARM_LEN * 0.8).rotated(arm.global_rotation)
+		GameFeel.parry_burst(get_parent(), tip, 44.0)
+		Epic.burst(get_parent(), tip, Color(0.75, 0.9, 1.0), 26, 420.0, 0.5, 0.8)
+		Epic.ring(get_parent(), tip, BLUE_FX, 200.0, 0.45, 10.0)
+		Epic.shards(get_parent(), tip, Color(0.6, 0.65, 0.75), 10, 380.0, 7.0)
+		Epic.anim(get_parent(), "bsod", "fxshock", tip, 1.1)
+	Epic.flash(get_parent(), BLUE_FX, 0.35, 0.5)
+	Epic.speed_lines(get_parent(), 0.5, Color(0.75, 0.9, 1.0, 0.5))
 	GameFeel.flash(rig, 0.3, Color(0.6, 0.85, 1.0))
 	_shake(8.0, 0.4)
 	_show_paddles(false)
@@ -2038,37 +2096,3 @@ func _gpos(part: Node2D) -> Vector2:
 	return part.global_position if part and is_instance_valid(part) else global_position + CENTER
 
 
-## DESFIBRILACIÓN: carga las paletas y descarga en cada latido; la última es la descarga final.
-func _climax() -> bool:
-	_climax_clear()
-	var p := get_parent()
-	var blue := Color(0.4, 0.75, 1.0)
-	var steps := [
-		{"mode": "rhythm", "action": "parry", "title": "¡DESCARGA EN EL LATIDO!", "sub": "Pulsa cuando cada latido llega al botón",
-			"beats": [1.0, 1.6, 2.2, 2.8], "window": 0.17, "col": blue,
-			"before": func() -> void:
-				Epic.charge(p, _gpos(heart), blue, 0.6, 160.0, heart)
-				await get_tree().create_timer(0.3).timeout,
-			"pressed": func() -> void:
-				var at := _gpos(heart)
-				Epic.ring(p, at, blue, 200.0, 0.35, 8.0)
-				Epic.burst(p, at, Color(0.7, 0.9, 1.0), 12, 320.0, 0.3, 0.4)
-				Epic.flash(p, blue, 0.15, 0.2)
-				GameFeel.flash(rig, 0.1, Color(0.6, 0.85, 1.0))
-				_shake(3.0, 0.1),
-			"ok": func() -> void:
-				Epic.word(p, _gpos(heart) + Vector2(0, -60), "¡RITMO!", Color(0.6, 1.0, 0.7), 36)},
-		{"mode": "timing", "action": "action_primary", "title": "¡DESCARGA FINAL!", "sub": "", "dur": 1.0, "col": blue,
-			"before": func() -> void:
-				Epic.charge(p, _gpos(heart), Color(1, 1, 1), 0.5, 200.0, heart),
-			"ok": func() -> void:
-				Epic.anim(p, "bsod", "fxpulse", _gpos(heart), 1.4)
-				Epic.whiteout(p, Color(0.75, 0.9, 1.0), 0.6, 0.1)
-				Epic.ring(p, _gpos(heart), blue, 420.0, 0.6, 16.0)
-				Epic.shards(p, _gpos(heart), Color(0.85, 0.2, 0.25), 12, 380.0, 7.0)
-				Epic.word(p, _gpos(heart) + Vector2(0, -70), "¡DESCARGA!", Color(0.7, 0.9, 1.0), 48)
-				await get_tree().create_timer(0.4).timeout,
-			"fail": func() -> void:
-				_climax_hurt(2, _gpos(heart))},
-	]
-	return await Epic.climax(self, steps)
