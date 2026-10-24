@@ -699,12 +699,39 @@ func _lose() -> void:
 	_over = true
 	boss.call("pause_ai")
 	_music_end("lose")
-	_end_title.text = "CRASH DEL ESTUDIANTE"
-	_end_title.add_theme_color_override("font_color", Color(1, 0.35, 0.3))
-	_end_sub.text = _end_keys("reintentar")
-	await get_tree().create_timer(1.0).timeout
+	_fighting = false
+	# el personaje se queda tirado en el suelo (ya no se levanta)
+	for pl in players:
+		if is_instance_valid(pl) and pl.has_method("stay_fallen"):
+			pl.call("stay_fallen")
+	# momento de la derrota: cámara lenta, zoom al caído y el mundo se apaga en rojo
+	_boss_hud.visible = false
+	Epic.flash(self, Color(1, 0.15, 0.1), 0.45, 0.6)
+	Epic.cam_zoom(get_tree(), 1.3, 0.6)
+	if is_instance_valid(_dim):
+		create_tween().tween_property(_dim, "color", Color(0.55, 0.38, 0.4), 0.8)
+	Engine.time_scale = 0.35
+	await get_tree().create_timer(0.9, true, false, true).timeout
+	Engine.time_scale = 1.0
 	_lock_player(true)
-	_end_box.visible = true
+	for pl in players:
+		if is_instance_valid(pl) and pl.has_method("stay_fallen"):
+			pl.call("stay_fallen")
+	var hp_left := 0.0
+	var ph := 1
+	if is_instance_valid(boss):
+		hp_left = 100.0 * float(boss.get("hp")) / maxf(1.0, float(boss.get("MAX_HP")))
+		ph = int(boss.get("phase"))
+	var secs := int((Time.get_ticks_msec() - _t0) / 1000.0)
+	var es := EndScreen.new()
+	es.win = false
+	es.title = "CRASH DEL ESTUDIANTE"
+	es.accent = Color(1.0, 0.25, 0.22)
+	es.lines = ["> ERROR FATAL: el estudiante dejó de responder",
+		"> %s sigue en línea  ·  vida restante %d %%  ·  fase %d/3  ·  %d:%02d" % [BOSSES[boss_kind]["name"], int(ceil(hp_left)), ph, secs / 60, secs % 60]]
+	es.tip = "CONSEJO: " + str(TIPS.get(boss_kind, "observa sus avisos rojos y rueda a tiempo."))
+	es.keys = _end_keys("reintentar")
+	_show_end(es)
 
 
 func _on_victory() -> void:
@@ -715,21 +742,60 @@ func _on_victory() -> void:
 	retry = false
 	_boss_hud.visible = false
 	_lock_player(true)
-	_end_title.text = BOSSES[boss_kind]["win"]
-	_end_title.add_theme_color_override("font_color", Color(0.45, 1.0, 0.5))
 	var secs := int((Time.get_ticks_msec() - _t0) / 1000.0)
 	var rank := "S" if _hits_taken <= 2 else ("A" if _hits_taken <= 5 else ("B" if _hits_taken <= 9 else "C"))
 	GameState.record_victory(boss_kind, rank, secs)   # el salón dora la estatua
-	_end_sub.text = "Rango %s  ·  Tiempo %d:%02d  ·  Golpes recibidos %d  ·  Golpes al punto débil %d\n%s" % [rank, secs / 60, secs % 60, _hits_taken, _weak_hits, _end_keys("repetir")]
-	_end_sub.size.y = 60
+	# momento de la victoria: zoom a los jugadores con luz dorada
+	Epic.cam_zoom(get_tree(), 1.2, 0.8)
+	Epic.flash(self, Color(1, 0.95, 0.7), 0.35, 0.5)
+	await get_tree().create_timer(0.7).timeout
+	var es := EndScreen.new()
+	es.win = true
+	es.title = "¡VICTORIA!"
+	es.accent = _accent()
+	es.lines = ["%s DERROTADO" % BOSSES[boss_kind]["name"], str(BOSSES[boss_kind]["win"])]
+	es.rank = rank
+	es.stats = [["TIEMPO", secs, "time"], ["GOLPES RECIBIDOS", _hits_taken, "int"], ["GOLPES AL PUNTO DÉBIL", _weak_hits, "int"]]
 	# primera victoria: avisa la técnica que se acaba de conseguir
 	if GameState.last_won == boss_kind:
 		var Tech = load("res://scripts/combat/techniques.gd")
 		for id in Tech.DATA.keys():
 			if Tech.DATA[id]["boss"] == boss_kind:
-				_end_sub.text = "¡NUEVA TÉCNICA! %s (%s) · equípala en el casillero del salón\n" % [Tech.DATA[id]["name"], str(Tech.SLOT_LABEL[Tech.DATA[id]["slot"]]).to_lower()] + _end_sub.text
-				_end_sub.size.y = 84
+				es.tip = "¡NUEVA TÉCNICA!  %s (%s) · equípala en el casillero" % [Tech.DATA[id]["name"], str(Tech.SLOT_LABEL[Tech.DATA[id]["slot"]]).to_lower()]
+	es.keys = _end_keys("repetir")
+	_show_end(es)
+
+
+var _end_screen: EndScreen
+
+
+func _show_end(es: EndScreen) -> void:
+	for n in [_end_title, _end_sub]:
+		if is_instance_valid(n):
+			n.visible = false
+	for c in _end_box.get_children():
+		if c is ColorRect:
+			(c as ColorRect).visible = false
+	_end_screen = es
+	_end_box.add_child(es)
 	_end_box.visible = true
+	es.stamp.connect(func() -> void:
+		play_sfx("title_slam", -2.0)
+		Epic.cam_punch(get_tree(), 0.05, 0.25))
+
+
+## Consejo en la pantalla de derrota (la mecánica propia de cada boss).
+const TIPS := {
+	"deadbeef": "rompe sus brazos para quitarle ataques; en el duelo final, parry a los brazos que lanza.",
+	"bsod": "ataca entre latidos: el corazón solo se abre ahí. Parry en el latido = arritmia.",
+	"div0": "hunde su acción bajo la línea roja para que quiebre y reciba doble daño.",
+	"syntax": "golpea los pupitres en el orden de la pizarra para aprobar la lección.",
+	"stack": "golpea la base de la torre cuando se incline hacia él para tumbársela encima.",
+	"judge": "junta 3 pruebas y hazle parry al sello DENEGADO: ¡OBJECIÓN!",
+	"tex": "mírala para petrificarla; si le das la espalda, avanza a saltos.",
+	"kp": "rompe la cámara que está al aire (luz roja) para dejarlo sin señal.",
+	"sudo": "aprende sus tres fases; en el ASTRA, el QTE no perdona.",
+}
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -738,7 +804,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("debug_next_phase") and _fighting and not _over:
 		boss.call("debug_next_phase")
 		get_viewport().set_input_as_handled()
-	elif event.is_action_pressed("retry") and _over and _end_box.visible:
+	elif event.is_action_pressed("retry") and _over and _end_box.visible and (_end_screen == null or _end_screen.input_ready()):
 		get_viewport().set_input_as_handled()
 		get_tree().reload_current_scene.call_deferred()
 	elif event.is_action_pressed("back"):
@@ -1294,3 +1360,193 @@ class TitleCard extends CanvasLayer:
 		if t > 1.1 and faculty != "":
 			var kf := clampf((t - 1.1) / 0.35, 0.0, 1.0) * (1.0 - out)
 			Style.title(_c, Vector2(640, y0 + 232), faculty, 18, Color(accent.lightened(0.5), kf), Color(0, 0, 0, 0.8 * kf), HORIZONTAL_ALIGNMENT_CENTER, 1200, 0.0)
+
+
+## Pantalla de VICTORIA o DERROTA (letra arcade de la portada, como la tarjeta de presentación).
+class EndScreen extends Control:
+	const Style := preload("res://scripts/ui/ui_style.gd")
+	signal stamp
+	var win := true
+	var title := ""
+	var lines: Array = []
+	var stats: Array = []      # [nombre, valor, "int" | "time"]
+	var rank := ""
+	var tip := ""
+	var keys := ""
+	var accent := Color(1, 0.8, 0.3)
+	var t := 0.0
+	var _stamped := false
+	var _bits: Array = []      # confeti / chispas
+	const RANK_AT := 2.0
+
+	func _ready() -> void:
+		size = Vector2(1280, 720)
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+		process_mode = Node.PROCESS_MODE_ALWAYS
+		for i in 70:
+			_bits.append(_new_bit(true))
+
+	func input_ready() -> bool:
+		return t > (2.4 if win else 2.6)
+
+	func _new_bit(spread: bool) -> Array:
+		var cols := [accent, accent.lightened(0.4), Color(1, 0.95, 0.6), Color.WHITE] if win else [Color(1, 0.2, 0.15), Color(0.5, 0.05, 0.05), Color(0.9, 0.9, 0.9)]
+		var y := randf_range(-720, 0) if spread else randf_range(-60, -10)
+		# [pos, vel, giro, vel giro, color, tamaño]
+		return [Vector2(randf_range(0, 1280), y), Vector2(randf_range(-40, 40), randf_range(90, 220)) * (1.0 if win else 0.6),
+			randf() * TAU, randf_range(-6, 6), cols[randi() % cols.size()], randf_range(4, 9)]
+
+	func _process(delta: float) -> void:
+		t += delta
+		for b in _bits:
+			b[0] += b[1] * delta
+			b[2] += b[3] * delta
+			if b[0].y > 740:
+				var nb := _new_bit(false)
+				for k in nb.size():
+					b[k] = nb[k]
+		if win and not _stamped and t >= RANK_AT:
+			_stamped = true
+			stamp.emit()
+		queue_redraw()
+
+	static func _out3(k: float) -> float:
+		k = clampf(k, 0.0, 1.0)
+		return 1.0 - pow(1.0 - k, 3.0)
+
+	func _draw() -> void:
+		if win:
+			_draw_win()
+		else:
+			_draw_lose()
+		var f := ThemeDB.fallback_font
+		if input_ready() and keys != "":
+			var a := 0.55 + 0.45 * absf(sin(t * 3.0))
+			Style.title(self, Vector2(640, 676), keys, 20, Color(1, 1, 1, a), Color(0.03, 0.02, 0.06, a), HORIZONTAL_ALIGNMENT_CENTER, 1200, 0.0)
+
+	# ---------------------------------------------------------------- victoria
+	func _draw_win() -> void:
+		var k := _out3(t / 0.35)
+		draw_rect(Rect2(0, 0, 1280, 720), Color(0.02, 0.02, 0.05, 0.62 * k))
+		# rayos de luz que giran detrás del título
+		var c := Vector2(640, 190)
+		for i in 16:
+			var a0 := t * 0.25 + TAU * i / 16.0
+			var pts := PackedVector2Array([c, c + Vector2.from_angle(a0) * 900.0, c + Vector2.from_angle(a0 + 0.09) * 900.0])
+			draw_colored_polygon(pts, Color(accent, 0.07 * k))
+		# confeti
+		for b in _bits:
+			draw_set_transform(b[0], b[2], Vector2.ONE)
+			var sz: float = b[5]
+			draw_rect(Rect2(-sz * 0.5, -sz * 0.25, sz, sz * 0.5), Color(b[4], 0.9 * k))
+		draw_set_transform(Vector2.ZERO)
+		# ¡VICTORIA! cae de grande y golpea
+		if t > 0.1:
+			var kk := clampf((t - 0.1) / 0.22, 0.0, 1.0)
+			var sc := lerpf(3.2, 1.0, kk * kk)
+			var hit := clampf(1.0 - (t - 0.32) / 0.4, 0.0, 1.0) if t > 0.32 else 0.0
+			var base := Transform2D(0.0, Vector2(sc, sc), 0.0, Vector2(640, 220) + Vector2(randf_range(-4, 4), randf_range(-2, 2)) * hit)
+			Style.title(self, Vector2.ZERO, title, 104, Color(1.0, 0.92, 0.45, kk), Color(0.18, 0.08, 0.0, kk), HORIZONTAL_ALIGNMENT_CENTER, 1200, -0.18, base)
+			draw_set_transform(Vector2.ZERO)
+			# brillo que cruza las letras
+			var sx := fmod(t * 700.0, 2400.0) - 600.0
+			draw_colored_polygon(PackedVector2Array([Vector2(sx, 130), Vector2(sx + 40, 130), Vector2(sx - 20, 240), Vector2(sx - 60, 240)]), Color(1, 1, 1, 0.18 * kk))
+		# boss derrotado + línea de terminal
+		if t > 0.55 and lines.size() > 0:
+			var kl := _out3((t - 0.55) / 0.3)
+			Style.title(self, Vector2(640 + (1.0 - kl) * 600.0, 280), str(lines[0]), 30, Color(accent.lightened(0.35), kl), Color(0.03, 0.02, 0.06, kl), HORIZONTAL_ALIGNMENT_CENTER, 1100, -0.12)
+		if t > 0.8 and lines.size() > 1:
+			var s1 := str(lines[1])
+			var n := clampi(int((t - 0.8) / 0.025), 0, s1.length())
+			draw_string(ThemeDB.fallback_font, Vector2(0, 318), s1.substr(0, n), HORIZONTAL_ALIGNMENT_CENTER, 1280, 20, Color(0.45, 1.0, 0.5))
+		# panel de estadísticas (filas que entran y números que cuentan)
+		if t > 1.0:
+			var kp := _out3((t - 1.0) / 0.3)
+			var panel := Rect2(250 - (1.0 - kp) * 700.0, 350, 560, 44.0 * stats.size() + 26.0)
+			draw_colored_polygon(Style.slanted(panel, 26), Color(0.04, 0.03, 0.08, 0.88))
+			draw_colored_polygon(Style.slanted(Rect2(panel.position.x, panel.position.y, panel.size.x, 4), 4), accent)
+			for i in stats.size():
+				var row_t := t - 1.15 - i * 0.22
+				if row_t <= 0.0:
+					continue
+				var kr := clampf(row_t / 0.35, 0.0, 1.0)
+				var st: Array = stats[i]
+				var val := float(st[1]) * kr
+				var txt := "%d:%02d" % [int(val) / 60, int(val) % 60] if str(st[2]) == "time" else str(int(round(val)))
+				var y := panel.position.y + 44.0 + i * 44.0
+				Style.title(self, Vector2(panel.position.x + 40, y), str(st[0]), 22, Color(0.85, 0.88, 1.0, kr), Color(0.02, 0.02, 0.05, kr), HORIZONTAL_ALIGNMENT_LEFT, -1, -0.1)
+				Style.title(self, Vector2(panel.end.x - 70 - Style.text_w(txt, 28), y + 2), txt, 28, Color(1, 1, 1, kr), Color(0.02, 0.02, 0.05, kr), HORIZONTAL_ALIGNMENT_LEFT, -1, -0.1)
+		# RANGO: sello que cae y golpea
+		if rank != "" and t > RANK_AT - 0.18:
+			var kk2 := clampf((t - (RANK_AT - 0.18)) / 0.18, 0.0, 1.0)
+			var sc2 := lerpf(4.0, 1.0, kk2 * kk2)
+			var rc := {"S": Color(1.0, 0.85, 0.2), "A": Color(0.45, 1.0, 0.5), "B": Color(0.45, 0.75, 1.0), "C": Color(0.8, 0.8, 0.85)}.get(rank, Color.WHITE) as Color
+			var cpos := Vector2(985, 440)
+			if t > RANK_AT:
+				var e := clampf((t - RANK_AT) / 0.5, 0.0, 1.0)
+				draw_arc(cpos + Vector2(0, -30), 60.0 + 140.0 * e, 0, TAU, 48, Color(rc, 1.0 - e), 8.0 * (1.0 - e) + 1.0)
+			draw_set_transform(cpos + Vector2(0, -30), -0.18, Vector2(sc2, sc2))
+			draw_circle(Vector2.ZERO, 74, Color(0.04, 0.03, 0.08, 0.92 * kk2))
+			draw_arc(Vector2.ZERO, 74, 0, TAU, 48, Color(rc, kk2), 6.0)
+			draw_arc(Vector2.ZERO, 64, 0, TAU, 48, Color(rc, 0.5 * kk2), 2.0)
+			draw_set_transform(Vector2.ZERO)
+			var base2 := Transform2D(-0.18, Vector2(sc2, sc2), 0.0, cpos + Vector2(0, 16))
+			Style.title(self, Vector2.ZERO, rank, 104, Color(rc, kk2), Color(0.1, 0.05, 0.0, kk2), HORIZONTAL_ALIGNMENT_CENTER, 300, 0.0, base2)
+			draw_set_transform(Vector2.ZERO)
+			Style.title(self, cpos + Vector2(0, 74), "RANGO", 22, Color(rc, kk2), Color(0.03, 0.02, 0.06, kk2), HORIZONTAL_ALIGNMENT_CENTER, 300, 0.0)
+		# nueva técnica
+		if tip != "" and t > 2.3:
+			var kt := _out3((t - 2.3) / 0.3)
+			var r := Rect2(190, 560 + (1.0 - kt) * 60.0, 900, 52)
+			var glow := 0.6 + 0.4 * absf(sin(t * 4.0))
+			draw_colored_polygon(Style.slanted(r, 20), Color(0.12, 0.08, 0.0, 0.9 * kt))
+			var edge := Style.slanted(r, 20)
+			edge.append(edge[0])
+			draw_polyline(edge, Color(1.0, 0.85, 0.3, glow * kt), 3.0)
+			Style.title(self, Vector2(640, r.position.y + 35), tip, 22, Color(1.0, 0.92, 0.5, kt), Color(0.1, 0.05, 0.0, kt), HORIZONTAL_ALIGNMENT_CENTER, 880, -0.1)
+
+	# ---------------------------------------------------------------- derrota
+	func _draw_lose() -> void:
+		var k := _out3(t / 0.5)
+		draw_rect(Rect2(0, 0, 1280, 720), Color(0.12, 0.0, 0.02, 0.72 * k))
+		# líneas de barrido (pantalla vieja) y bloques glitch
+		var y := 0.0
+		while y < 720.0:
+			draw_rect(Rect2(0, y, 1280, 2), Color(0, 0, 0, 0.18 * k))
+			y += 4.0
+		if fmod(t, 0.9) < 0.12:
+			for i in 6:
+				draw_rect(Rect2(randf_range(0, 1200), randf_range(0, 700), randf_range(40, 260), randf_range(4, 16)), Color(1, 0.2, 0.2, 0.2 * k))
+		# ceniza que cae despacio
+		for b in _bits:
+			draw_circle(b[0], float(b[5]) * 0.3, Color(b[4], 0.35 * k))
+		# título con separación roja / cian que se va asentando
+		if t > 0.2:
+			var kt := clampf((t - 0.2) / 0.3, 0.0, 1.0)
+			var g := clampf(1.0 - (t - 0.2) / 1.0, 0.0, 1.0) * 10.0 + (6.0 if fmod(t, 1.7) < 0.08 else 0.0)
+			var base := Transform2D(0.0, Vector2.ONE, 0.0, Vector2(640, 250))
+			Style.title(self, Vector2(-g, 0), title, 80, Color(1, 0.1, 0.2, 0.55 * kt), Color(0, 0, 0, 0), HORIZONTAL_ALIGNMENT_CENTER, 1200, -0.18, base)
+			Style.title(self, Vector2(g, 0), title, 80, Color(0.2, 0.9, 1.0, 0.45 * kt), Color(0, 0, 0, 0), HORIZONTAL_ALIGNMENT_CENTER, 1200, -0.18, base)
+			Style.title(self, Vector2.ZERO, title, 80, Color(1.0, 0.32, 0.28, kt), Color(0.08, 0.0, 0.0, kt), HORIZONTAL_ALIGNMENT_CENTER, 1200, -0.18, base)
+			draw_set_transform(Vector2.ZERO)
+		# líneas de terminal que se escriben
+		var f := ThemeDB.fallback_font
+		var start := 0.7
+		for i in lines.size():
+			var s1 := str(lines[i])
+			var n := clampi(int((t - start) / 0.02), 0, s1.length())
+			if n > 0:
+				var cur := "_" if n < s1.length() and fmod(t, 0.3) < 0.15 else ""
+				draw_string(f, Vector2(0, 320 + i * 30), s1.substr(0, n) + cur, HORIZONTAL_ALIGNMENT_CENTER, 1280, 20, Color(1, 0.55, 0.5) if i == 0 else Color(0.85, 0.85, 0.9))
+			start += s1.length() * 0.02 + 0.15
+		# consejo
+		if tip != "" and t > start + 0.1:
+			var kc := _out3((t - start - 0.1) / 0.3)
+			var r := Rect2(220, 430, 840, 52)
+			draw_colored_polygon(Style.slanted(r, 18), Color(0.05, 0.02, 0.04, 0.85 * kc))
+			draw_colored_polygon(Style.slanted(Rect2(r.position.x, r.position.y, 6, r.size.y), 4), Color(1.0, 0.85, 0.3, kc))
+			Style.title(self, Vector2(640, r.position.y + 33), tip, 19, Color(1, 0.93, 0.7, kc), Color(0.05, 0.02, 0.02, kc), HORIZONTAL_ALIGNMENT_CENTER, 820, 0.0)
+		# ¿REINTENTAR?
+		if input_ready():
+			var a := 0.6 + 0.4 * absf(sin(t * 4.0))
+			Style.title(self, Vector2(640, 600), "¿REINTENTAR?", 46, Color(1.0, 0.9, 0.4, a), Color(0.1, 0.03, 0.0, a), HORIZONTAL_ALIGNMENT_CENTER, 800)

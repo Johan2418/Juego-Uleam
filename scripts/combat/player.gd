@@ -74,6 +74,8 @@ var appearance: CharacterAppearance = null
 ## Multijugador en la arena: al quedarse sin vida queda CAÍDO hasta que el compañero lo levante.
 var ko_mode: bool = false
 var coop_ko: bool = false
+## Derrota: al quedarse sin vida se queda tirado en el suelo (no se levanta).
+var stay_down: bool = false
 var class_controller: Node
 var lock: Node   ## fijar objetivo (lock_on.gd)
 var character_id: String = ""
@@ -409,11 +411,30 @@ func take_hit(amount: int, from: Vector2, unblockable: bool = false) -> void:
 		if ko_mode:
 			coop_ko = true
 			_hurt_left = 1.0e9   # se queda en el piso hasta revive()
-		_play("knockdown", true, 1.0)
+		if stay_down:
+			_hurt_left = 1.0e9
+		if (coop_ko or stay_down) and anim.sprite_frames and anim.sprite_frames.has_animation("dead_%s" % _action_dir("dead")[0]):
+			_play("dead", true, 1.0)   # tirado en el suelo, sin la parte de levantarse
+		else:
+			_play("knockdown", true, 1.0)
 	else:
 		_hurt_left = HURT_TIME
 		_iframes_left = HURT_IFRAMES
 		_play("flinch", true, 1.0)
+
+
+## Derrota (la arena lo llama): si ya está en el suelo se queda ahí; si no, cae y se queda.
+func stay_fallen() -> void:
+	stay_down = true
+	_knocked_down = true
+	_hurt_left = 1.0e9
+	_hurt_vel = Vector2.ZERO
+	_lock_anim = true
+	velocity = Vector2.ZERO
+	if anim.sprite_frames and anim.sprite_frames.has_animation("dead_%s" % _action_dir("dead")[0]):
+		var cur := String(anim.animation)
+		if not cur.begins_with("dead"):
+			_play("dead", true, 1.0)
 
 
 ## Multijugador: el compañero lo levantó.

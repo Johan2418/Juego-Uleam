@@ -153,8 +153,11 @@ static func build_frames(id: String) -> SpriteFrames:
 					for i in [0, 1, 2, 3, 3, 4, 4, 5, 6, 7]:
 						kseq.append(kd8[i])
 					_add(frames, "knockdown_%s" % d, kseq, kseq.size() / 1.2, false)
+					# derrotado: cae y se queda en el suelo (sin levantarse)
+					_add(frames, "dead_%s" % d, [kd8[0], kd8[1], kd8[2], kd8[3]], 4.0 / 0.6, false)
 				else:
 					_add(frames, "knockdown_%s" % d, [tex[2], tex[2], tex[3]], 2.5, false)
+					_add(frames, "dead_%s" % d, [tex[2]], 1.0, false)
 			if tex.size() >= 4 and base in COMBO_BASES.values():
 				# golpe 1 = poses 1-2 (+ sus intermedias); golpe 2 = poses 3-4 (+ intermedias)
 				if has8:
