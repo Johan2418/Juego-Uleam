@@ -110,6 +110,8 @@ func _one(kind: String) -> void:
 	await _wait(0.3)
 	_last_pos.clear()
 	_max_step = 0.0
+	var attacks := [0]
+	(pl2.get("class_controller") as Node).connect("attack_started", func(_k: String) -> void: attacks[0] += 1)
 	Epic.EpicAuto.v = 1
 	boss2.call(won)
 	var t := 0.0
@@ -122,6 +124,8 @@ func _one(kind: String) -> void:
 	_check("%s: QTE ganados -> victoria (%.1f s)" % [kind, t], bool(arena2.get("_over")))
 	_check("%s: el personaje fue hasta el boss (%.0f px)" % [kind, min_d], min_d < 190.0 or kind == "stack" or (kind == "judge" and min_d < 300.0))
 	_check("%s: sin teletransporte (paso máx %.0f px)" % [kind, _max_step], _max_step < 30.0)
+	# en los QTE de machacar, un golpe por pulsación (el bot pulsa ~16 veces por segundo)
+	_check("%s: golpes del personaje en el clímax: %d" % [kind, attacks[0]], attacks[0] >= (8 if kind in ["deadbeef", "div0", "stack", "tex", "kp"] else 2))
 	Epic.EpicAuto.v = 0
 	Engine.time_scale = 1.0
 	await _wait(0.5 if not capture else 1.5)

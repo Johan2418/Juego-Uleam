@@ -270,7 +270,9 @@ static func climax(boss: Node, steps: Array) -> bool:
 			break
 		cam_zoom(tree, float(s.get("zoom", 1.12)), 0.35)
 		cam_focus(tree, (boss as Node2D).global_position + Vector2(0, -90))
-		Engine.time_scale = float(s.get("slow", 0.35))
+		# machacar / secuencia: sin cámara lenta (si no, cada golpe no alcanza a verse antes del siguiente)
+		var mode_s := str(s.get("mode", "timing"))
+		Engine.time_scale = float(s.get("slow", 1.0 if mode_s in ["mash", "sequence"] else 0.35))
 		var opts := s.duplicate()
 		for k in ["mode", "action", "title", "zoom", "slow", "before", "pressed", "ok", "fail", "go", "look", "act", "roll_dir", "run_speed"]:
 			opts.erase(k)
@@ -430,7 +432,13 @@ static func act(p: Node2D, kind: String, dir: Vector2) -> void:
 	var d := dir.normalized() if dir.length() > 0.01 else Vector2(p.get("facing_vec"))
 	match kind:
 		"attack":
+			# un golpe NUEVO por cada pulsación (corta el anterior) y va pasando por el combo 1-2-3
+			var step := (int(p.get_meta("epic_combo", -1)) + 1) % 3
+			p.set_meta("epic_combo", step)
 			cc.call("cancel_action")
+			cc.set("combo_step", step)
+			cc.set("_combo_deadline", Time.get_ticks_msec() / 1000.0 + 2.0)
+			cc.set("_primary_ready_at", 0.0)
 			p.call("_update_facing", d)
 			p.set("_walk_dir", CharacterSprites.walk_dir_for(d, str(p.get("facing_name"))))
 			cc.call("set_facing", d)
