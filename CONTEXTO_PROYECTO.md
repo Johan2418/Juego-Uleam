@@ -4,7 +4,7 @@
 > **Regla de oro:** ANTES de tocar nada, lee este archivo completo. AL TERMINAR cada tarea (o antes de que se corte la sesión), actualiza las secciones **Estado actual**, **Trabajo en curso** y **Bitácora**. Si no queda escrito aquí, la otra sesión no lo sabe.
 
 - Ruta del archivo: `C:\Users\leopo\Documents\Juegos\Godot\prototipo\CONTEXTO_PROYECTO.md`
-- Última actualización: 2026-10-22 — SUDO: poses de poder y efectos animados de grokbot (ronda épica)
+- Última actualización: 2026-10-23 ~20:10 — pantallas de victoria/derrota, QTE con el personaje moviéndose, multijugador en los 9 bosses (sesión cloud de Claude; repo GitHub al día en `main`)
 
 ---
 
@@ -112,18 +112,32 @@ J ataque leve (combo) · K especial (cooldown) · L parry · Espacio ultimate (m
 - No lanzar copias y commits/escrituras del mismo archivo en paralelo (una vez se subió un `scale_fix` viejo).
 - La sesión a veces no puede borrar archivos: sobrescribir o mover a `_to_delete/`.
 - Antes de cambiar calibración o el slicer: backup con fecha.
+- **Flujo de trabajo actual (sesión en la nube + PC enlazado):** se trabaja en un clon de GitHub (`Johan2418/Juego-Uleam`, rama `main`) con Godot 4.6.2 headless en la nube; se prueba con los bots de `ztest/`; se hace commit + push; en el PC se clona/actualiza `~/ju` (git) y se copian SOLO los archivos cambiados a la carpeta del proyecto, después de comprobar que el PC tenía la versión anterior (si no, avisar) y respaldar lo reemplazado en `Claude outputs/<tema>_backup_<fecha>/`.
+- Al agregar **sonidos o imágenes nuevos**, enviar también sus archivos de `.godot/imported` al PC (si no, Godot del PC no los carga hasta reimportar: pasó con la música).
+- No subir al repo los `.uid` ni los `.import` que genera Godot al importar en la nube (se ignoran en `.git/info/exclude`).
+- Los enfriamientos de ataque usan tiempo REAL (`Time.get_ticks_msec`): las pruebas con `--fixed-fps` corren más rápido que el reloj y bloquean ataques; las que dependen de atacar seguido (`kp_final_test`) se corren sin `--fixed-fps`.
 
 ---
 
-## 5. Estado actual (2026-10-18)
+## 5. Estado actual (2026-10-23)
 
-**Hecho y verificado en juego:**
-- Set completo de sprites para ambos personajes: idle (animado), caminata de 8 frames a 16 fps en 5 direcciones, rodar, combos J (4 frames por golpe en guerrero; mago/chain con hoja `*8` donde existe, si no 2 poses por golpe), remates, especial/parry/ultimate (incl. hojas de 8 poses del pulido 3), contraataque, knockdown, idle_long (mira el celular), daño.
-- Ataques diagonales de las 3 clases en ambas diagonales.
-- Parry frontal funciona (frente bloquea, espalda no). Las 3 ultimates únicas funcionan.
-- Game feel completo (hit-stop, destellos, polvo, fantasmas, squash).
-- Tamaño unificado: walk/idle/ataques dentro de ±5 % (cabeza y alto), salvo `mago_ultimate8` (métrica falla, se deja).
-- `roll_up_right` de ambos personajes se espeja al cargar (`MIRROR_SHEETS`) porque las hojas miran a la izquierda.
+**Flujo del juego:** portada (`scenes/title.tscn`, escena principal) → 1 o 2 jugadores → selección de personaje y clase estilo Mega Man X4 → sala de entrenamiento (`training.tscn`, lecciones; casillero de técnicas) → Salón de las Facultades (`boss_hall.tscn`, estatuas = puertas de los 9 bosses; casillero de técnicas) → arena del boss (`boss_arena.gd` + `scenes/combat/boss_test.tscn`).
+
+**Bosses (9):** 0xDEADBEEF, B.S.O.D., #DIV/0!, SYNTAX ERROR, STACK OVERFLOW, 403 FORBIDDEN, MISSING TEXTURE, KERNEL PANIC y SUDO (Club IA, basado en una persona real). Todos con sprites de grokbot, música por fase, mecánica propia, lluvia de fase, duelo final y remate.
+- Presentación: zumbido de tensión + grito propio (`<boss>_roar.ogg`) + tarjeta épica con la letra de la portada (`TitleCard`).
+- Efectos épicos compartidos (`epic_fx.gd`) y 16 efectos animados de grokbot (`boss_<boss>_fx*`).
+- Golpe crítico al aturdir (QTE): el personaje va en dash y le pega.
+- Clímax con QTE antes del remate (bosses 1 y 3-8; B.S.O.D. NO lleva QTE por pedido de Johan): el personaje corre y actúa (sin teletransporte); machacar = un golpe por pulsación, sin cámara lenta.
+- Victoria/derrota: pantallas `EndScreen` (rango con sello, estadísticas, técnica nueva / consejo del jefe, ¿REINTENTAR?). Al perder el personaje se queda tirado (`stay_fallen`, animación `dead_<dir>`).
+
+**Multijugador local:** teclado + mando o 2 mandos; pantalla dividida dinámica (Voronoi) fuera de la arena; en la arena los dos pelean contra el boss (objetivo alternado, daño a ambos, caído hasta que el compañero lo levanta, derrota si caen los dos).
+
+**Pruebas automáticas:** `ztest/` (ver sección 6, entrada del 23-10 ~17:10). Todo probado con bots; **falta que Johan juegue** sobre todo los tiempos de los QTE con mando.
+
+**Pendiente conocido:** el casillero edita solo al P1 (el P2 usa las técnicas de su clase); arte de portada de grokbot (`GROKBOT_PORTADA.md`, necesita `referencias_animacion/portada/uleam_fachada.jpg`); efectos de sonido generales (golpes, pasos).
+
+**Personajes (resumen histórico, 2026-10-18):**
+- Set completo de sprites para ambos personajes: idle (animado), caminata de 8 frames a 16 fps en 5 direcciones, rodar, combos J, remates, especial/parry/ultimate; diagonales de las 3 clases; parry frontal; 3 ultimates; game feel completo; tamaño unificado (±5 %).
 
 **Bosses (2026-10-16 a 18), probados con el bot en la VM; falta la prueba de Johan en el editor:**
 - 8 bosses, uno por facultad, cada uno con puerta en el campus (E para entrar, Esc vuelve), sprites reales, música propia por fase y su mecánica única: 0xDEADBEEF (brazos rompibles), B.S.O.D. (ritmo cardíaco), #DIV/0! (la Bolsa), SYNTAX ERROR (La Lección), STACK OVERFLOW (La Torre), 403 FORBIDDEN (La Evidencia), MISSING TEXTURE (La Mirada), KERNEL PANIC (AL AIRE). Resumen de cada boss: `referencias_animacion/GUIA_BOSSES.md`.
@@ -214,9 +228,13 @@ J ataque leve (combo) · K especial (cooldown) · L parry · Espacio ultimate (m
 - 22-10 ~21:00: **B.S.O.D. sin QTE** (pedido de Johan: su final de antes era mejor): `_final_won` → `_last_shock()` (la última descarga devuelta en cámara lenta, barras, zoom al corazón, ¡CLEAR!) → `_finisher`; cada descarga devuelta (`final_back`, `_final_back_n`) pega más fuerte. Bot `ztest/bsod_final_test.tscn` (gana el duelo con parrys). El GOLPE CRÍTICO sigue también en B.S.O.D.
 - 22-10 ~23:15: **Ronda épica de grokbot integrada** (16/16, notas en `GROKBOT_BOSSES_EPICO.md`): `tools/slice_boss_fx.py` (ancla = centro de la celda) → `assets/sprites/bosses/<boss>/boss_<boss>_<fx>_0..7.png`; `.godot/imported` enviado a la PC. climax_test 22/22.
 
-- 23-10 ~00:45: **Tarjeta de presentación épica + gritos + casillero en el entrenamiento.** `boss_arena.gd`: clase `TitleCard` (franjas cruzadas del color del boss, línea de terminal y el NOMBRE con la letra de la portada `ui_style.gd` que cae de 3x a 1x con destello, glitch rojo/cian, temblor, líneas de velocidad; `Style.title` acepta `base` para escalar). Sonidos: `play_sfx()`, `boss_roar()` (cooldown 2,5 s; lo llaman la intro (`Roar.spawn` en boss_roar.gd), el fin de la intro si no gritó y cada cambio de fase), `_start_rumble()`/`_stop_rumble()` (zumbido de tensión mientras se presenta). Audio generado con `tools/boss_roar_sfx.py`: `assets/audio/bosses/<boss>_roar.ogg` (rugido con formantes + capa propia de cada boss), `title_slam.ogg`, `intro_rumble.ogg`. Casillero de técnicas también en `training.gd` (`LOCKER_POS`, abre `character_creator.tscn` → vuelve al entrenamiento) y aviso en la selección. Bot `ztest/intro_test.tscn` 9/9. **Pendiente: copiar a la PC** (la sesión quedó sin enlace con la PC; hacer git pull en ~/ju y copiar, más `.godot/imported` de los .ogg nuevos).
+- 23-10 ~00:45: **Tarjeta de presentación épica + gritos + casillero en el entrenamiento.** `boss_arena.gd`: clase `TitleCard` (franjas cruzadas del color del boss, línea de terminal y el NOMBRE con la letra de la portada `ui_style.gd` que cae de 3x a 1x con destello, glitch rojo/cian, temblor, líneas de velocidad; `Style.title` acepta `base` para escalar). Sonidos: `play_sfx()`, `boss_roar()` (cooldown 2,5 s; lo llaman la intro (`Roar.spawn` en boss_roar.gd), el fin de la intro si no gritó y cada cambio de fase), `_start_rumble()`/`_stop_rumble()` (zumbido de tensión mientras se presenta). Audio generado con `tools/boss_roar_sfx.py`: `assets/audio/bosses/<boss>_roar.ogg` (rugido con formantes + capa propia de cada boss), `title_slam.ogg`, `intro_rumble.ogg`. Casillero de técnicas también en `training.gd` (`LOCKER_POS`, abre `character_creator.tscn` → vuelve al entrenamiento) y aviso en la selección. Bot `ztest/intro_test.tscn` 9/9. Copiado a la PC el 23-10 ~11:15 (incluido `.godot/imported` de los .ogg).
 
 - 23-10 ~17:10: **QTE con el personaje moviéndose** (pedido de Johan: que se vea al personaje hacer lo que pide el QTE, sin teletransporte). `epic_fx.gd`: títeres `grab()`/`release()` (le quita el control a los jugadores en pie durante la cinemática), `run_group()` (corren con su animación de caminar acelerada, polvo y estela en dash), `face()`, `act(p, "attack"|"parry"|"roll", dir)` (la acción real de su clase), `melee_spot()`, clase `Fly` + `fly()` (objeto que vuela en tiempo REAL para llegar justo en la ventana del QTE: lingote de oro, sellos). `climax()` acepta por paso `go` (Callable → punto al que corren), `look`, `act`, `roll_dir`. QTE ahora a la DERECHA de la pantalla. Golpe crítico (`boss_arena._crit_qte`, `CRIT_RADIUS` por boss): al acertar, dash hasta el boss + golpe propio + daño. Clímax rehechos: DEADBEEF (`StuckArm`: el brazo clavado en el cráneo, cada golpe lo hunde; el cráneo se lanza al jugador y se le hace parry), DIV0 (golpea la bóveda; lingote de oro gigante que se lanza y se devuelve), SYNTAX (frente a la pizarra), STACK (detrás de la torre, la empuja hacia el boss y rueda; `_finisher` no la vuelve a tumbar), 403 (sellos visibles en cada pulso del ritmo y sello gigante de la OBJECIÓN), TEX (corre a romper la estatua), KP (apaga el flambé y corre a romper la cámara más cercana, `_climax_camera()`). Arreglos: TEX `Final.Shot.hit_r`/`cover_deg` (el fantasma del duelo choca a 58 px y el parry lo cubre a 110°; antes pasaba de largo si el jugador se movía y contaba como fallo); KP duelo final: tiempo por cámara ≥ distancia/130 + 1,1 s (`FINAL_RUN_SPEED`, `FINAL_HIT_MARGIN`, `FINAL_TIME` 3,2→2,1), nunca se enciende la más lejana, el flambé cae cerca y no encima, hurtbox de cámara 40 px en el duelo; `class_controller._enable_hitbox` revisa a mano lo que ya estaba dentro del golpe (a veces no llegaba area_entered). **Bots en el repo: `ztest/`** (parse_all, climax_test, crit_test, coop_boss_test, intro_test, tex_final_test, kp_final_test). OJO: los enfriamientos de ataque usan tiempo real (`Time.get_ticks_msec`), así que `kp_final_test` se corre SIN `--fixed-fps`. Resultados: clímax 35/35 (1P y 2P), crítico 36/36, coop 81/81, intro 9/9, TEX duelo 3/3, KP guerrero caminando 2/2 en tiempo real. Video `Claude outputs/qte_con_movimiento.mp4`.
+- 23-10 ~19:10: **Machacar = un golpe por pulsación** (Johan: en algunos QTE el personaje pegaba una sola vez). `Epic.act("attack")` corta el golpe anterior y arranca uno nuevo pasando por el combo 1-2-3 (meta `epic_combo`); los pasos `mash` y `sequence` del clímax van SIN cámara lenta (antes la cámara lenta no dejaba ver cada golpe). `climax_test` cuenta los golpes (13-14 por QTE de machacar).
+- 23-10 ~20:00: **Pantallas de victoria y derrota + caído en el suelo.** `boss_arena.gd`: `_lose()` (cámara lenta 0,9 s, zoom, mundo en rojo, `stay_fallen()` a todos) y `_on_victory()` (zoom + destello) muestran `EndScreen` (clase al final de `boss_arena.gd`; `stamp` = golpe sonoro del rango; `input_ready()` bloquea reintentar hasta que termine de aparecer); `TIPS` = consejo por boss en la derrota. `player.gd`: `stay_down` + `stay_fallen()`; al llegar a 0 PV con `ko_mode`/`stay_down` usa la animación nueva `dead_<dir>` (`character_sprites.gd`: knockdown8 poses 0-3, o la pose de caído) que NO se levanta. Bot `ztest/end_test.tscn` (1P y 2P). Video `Claude outputs/pantallas_fin.mp4`.
+
+**SIGUIENTE:** nada a medias. Johan prueba en el editor (QTE con mando, pantallas finales, duelo de KERNEL PANIC con el guerrero) y da feedback.
 
 **Siguientes pasos generales (después del Pulido 4):**
 1. Ajustar números a gusto del usuario: cooldowns, daño, ventana/cono del parry, duración de ultimates, frecuencia de ataque del dummy.
@@ -226,6 +244,24 @@ J ataque leve (combo) · K especial (cooldown) · L parry · Espacio ultimate (m
 ---
 
 ## 7. Bitácora
+
+### 2026-10-23 (3) — Pantallas de victoria/derrota; el derrotado se queda en el suelo
+- `EndScreen` en `boss_arena.gd`, animación `dead_<dir>`, `player.stay_fallen()`. Detalle en la sección 6. Video `Claude outputs/pantallas_fin.mp4`.
+
+### 2026-10-23 (2) — QTE con el personaje moviéndose + arreglos TEX/KP
+- Títeres en `epic_fx.gd` (correr/actuar sin teletransporte), golpe crítico en dash, clímax rehechos, machacar = un golpe por pulsación. TEX: el parry del duelo ya no se pasa. KP: el duelo final se puede ganar caminando con el guerrero. Bots en `ztest/`. Video `Claude outputs/qte_con_movimiento.mp4`.
+
+### 2026-10-23 — Tarjeta de presentación épica, gritos de los bosses, casillero en el entrenamiento
+- `TitleCard`, `tools/boss_roar_sfx.py` (`<boss>_roar.ogg`, `title_slam.ogg`, `intro_rumble.ogg`). Video `Claude outputs/tarjeta_jefe.mp4`.
+
+### 2026-10-22 (6) — Bosses 1-8 épicos: efectos, golpe crítico, clímax con QTE; B.S.O.D. vuelve a su final sin QTE; ronda grokbot de 16 efectos integrada
+- `epic_fx.gd`, `tools/gen_prompts_bosses_epico.py`, `tools/slice_boss_fx.py`.
+
+### 2026-10-22 (5) — Multijugador etapa 2: los 9 bosses contra 2 jugadores
+- `coop_boss.gd`, peligros con `victims()`/`_victim`, levantar al caído, derrota si caen los dos.
+
+### 2026-10-22 (4) — Portada, selección estilo X4, entrenamiento y multijugador local (etapa 1)
+- `title.tscn`, `player_select.tscn`, `training.tscn`, `coop.gd` (pantalla dividida Voronoi), música de menú/entrenamiento.
 
 ### 2026-10-22 (3) — SUDO: ronda épica de grokbot integrada
 - 6 hojas nuevas (poses de poder + 5 efectos animados) recortadas con `slice_sudo_sheets.py` y usadas en los ataques (`Anim`, `_anim`, nuevas poses en `ANIMS`). Títulos de QTE ya no se montan.
